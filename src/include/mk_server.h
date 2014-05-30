@@ -23,7 +23,7 @@
 #ifndef MK_SERVER_H
 #define MK_SERVER_H
 
-static inline int mk_server_cork_flag(int fd, int state)
+static inline int mk_server_cork_flag(int fd, int state, struct server_config *config)
 {
     if (config->manual_tcp_cork == MK_FALSE) {
         return 0;
@@ -34,7 +34,7 @@ static inline int mk_server_cork_flag(int fd, int state)
 
 
 unsigned int mk_server_worker_capacity(unsigned short nworkers);
-void mk_server_launch_workers(void);
-void mk_server_loop(int server_fd);
+void mk_server_launch_workers(struct server_config *config);
+void mk_server_loop(int server_fd, struct server_config *config);
 
 #endif

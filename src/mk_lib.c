@@ -37,7 +37,7 @@
 #include <stdarg.h>
 #include <limits.h>
 
-static struct host *mklib_host_find(const char *name)
+static struct host *mklib_host_find(const char *name, struct server_config *config)
 {
     struct host *entry_host;
     const struct mk_list *head_vhost;
@@ -58,7 +58,7 @@ static void mklib_run(void *p)
     const mklib_ctx ctx = p;
 
     mk_utils_worker_rename("libmonkey");
-    mk_socket_set_tcp_defer_accept(config->server_fd);
+    mk_socket_set_tcp_defer_accept(ctx->config->server_fd);
 
     while (1) {
 
@@ -67,15 +67,15 @@ static void mklib_run(void *p)
             continue;
         }
 
-        remote_fd = mk_socket_accept(config->server_fd);
+        remote_fd = mk_socket_accept(ctx->config->server_fd);
         if (remote_fd == -1) continue;
 
-        ret = mk_sched_add_client(remote_fd);
+        ret = mk_sched_add_client(remote_fd, ctx->config);
         if (ret == -1) mk_socket_close(remote_fd);
     }
 }
 
-static int load_networking(const char *path)
+static int load_networking(const char *path, struct server_config *config)
 {
     void *handle;
     struct plugin *p;
@@ -97,7 +97,7 @@ static int load_networking(const char *path)
         return MKLIB_FALSE;
     }
 
-    mk_plugin_register(p);
+    mk_plugin_register(p, config);
     return MKLIB_TRUE;
 }
 
@@ -138,14 +138,16 @@ int mklib_callback_set(mklib_ctx ctx, const enum mklib_cb cb, void *func)
 mklib_ctx mklib_init(const char *address, const unsigned int port,
                      const unsigned int plugins, const char *documentroot)
 {
+    struct server_config *config;
+
     mklib_ctx a = mk_mem_malloc_z(sizeof(struct mklib_ctx_t));
     if (!a) return NULL;
 
-    config = mk_mem_malloc_z(sizeof(struct server_config));
+    config = mk_mem_malloc_z(sizeof(*config));
     if (!config) goto out;
 
     config->serverconf = mk_string_dup(MONKEY_PATH_CONF);
-    mk_config_set_init_values();
+    mk_config_set_init_values(config);
 
     /*
      * If the worker numbers have not be set, set the number based on
@@ -155,8 +157,8 @@ mklib_ctx mklib_init(const char *address, const unsigned int port,
         config->workers = sysconf(_SC_NPROCESSORS_ONLN);
     }
 
-    mk_sched_init();
-    mk_plugin_init();
+    mk_sched_init(config);
+    mk_plugin_init(config);
 
     a->plugdir = PLUGDIR;
 
@@ -165,16 +167,16 @@ mklib_ctx mklib_init(const char *address, const unsigned int port,
     if (plugins & MKLIB_LIANA_SSL) {
         config->transport_layer = mk_string_dup("liana_ssl");
         snprintf(tmppath, PATH_MAX, "%s/monkey-liana_ssl.so", a->plugdir);
-        if (!load_networking(tmppath)) goto out_config;
+        if (!load_networking(tmppath, config)) goto out_config;
     }
     else {
         config->transport_layer = mk_string_dup("liana");
         snprintf(tmppath, PATH_MAX, "%s/monkey-liana.so", a->plugdir);
-        if (!load_networking(tmppath)) goto out_config;
+        if (!load_networking(tmppath, config)) goto out_config;
     }
 
     if (!plg_netiomap) goto out_config;
-    mk_plugin_preworker_calls();
+    mk_plugin_preworker_calls(config);
 
     if (port) config->serverport = port;
     if (address) config->listen_addr = mk_string_dup(address);
@@ -212,13 +214,15 @@ mklib_ctx mklib_init(const char *address, const unsigned int port,
     config->server_software.len = 0;
     config->default_mimetype = mk_string_dup(MIMETYPE_DEFAULT_TYPE);
     config->mimes_conf_file = MK_DEFAULT_MIMES_CONF_FILE;
-    mk_mimetype_read_config();
+    mk_mimetype_read_config(config);
 
     config->worker_capacity = mk_server_worker_capacity(config->workers);
     config->max_load = (config->worker_capacity * config->workers);
 
     /* Server listening socket */
     config->server_fd = mk_socket_server(config->serverport, config->listen_addr, MK_FALSE);
+
+    a->config = config;
 
     /* Clock thread */
     mk_clock_sequential_init();
@@ -242,6 +246,8 @@ mklib_ctx mklib_init(const char *address, const unsigned int port,
  * Returns MKLIB_FALSE on failure. */
 int mklib_config(mklib_ctx ctx, ...)
 {
+    struct server_config *config = ctx->config;
+
     if (!ctx || ctx->lib_running) return MKLIB_FALSE;
 
     unsigned long len;
@@ -263,7 +269,7 @@ int mklib_config(mklib_ctx ctx, ...)
                 config->max_load = (config->worker_capacity * config->workers);
 
                 free(sched_list);
-                mk_sched_init();
+                mk_sched_init(ctx->config);
             break;
             case MKC_TIMEOUT:
                 i = va_arg(va, int);
@@ -355,10 +361,10 @@ int mklib_vhost_config(mklib_ctx ctx, const char *name, ...)
     if (!ctx) return MKLIB_FALSE;
 
     /* Does it exist already? */
-    struct host *h = mklib_host_find(name);
+    struct host *h = mklib_host_find(name, ctx->config);
     if (h) return MKLIB_FALSE;
 
-    const struct host *defaulth = mklib_host_find("default");
+    const struct host *defaulth = mklib_host_find("default", ctx->config);
     if (!defaulth) return MKLIB_FALSE;
 
 
@@ -421,8 +427,8 @@ int mklib_vhost_config(mklib_ctx ctx, const char *name, ...)
     h->header_host_signature.data = mk_string_dup(defaulth->header_host_signature.data);
     h->header_host_signature.len = defaulth->header_host_signature.len;
 
-    mk_list_add(&h->_head, &config->hosts);
-    config->nhosts++;
+    mk_list_add(&h->_head, &ctx->config->hosts);
+    ctx->config->nhosts++;
 
     va_end(va);
     return MKLIB_TRUE;
@@ -433,14 +439,15 @@ int mklib_start(mklib_ctx ctx)
 {
     if (!ctx || ctx->lib_running) return MKLIB_FALSE;
 
-    mk_plugin_core_process();
+    mk_plugin_core_process(ctx->config);
 
-    ctx->workers = mk_mem_malloc_z(sizeof(pthread_t) * config->workers);
+    ctx->workers = mk_mem_malloc_z(sizeof(pthread_t) * ctx->config->workers);
 
     unsigned int i;
-    const unsigned int workers = config->workers;
+    const unsigned int workers = ctx->config->workers;
     for (i = 0; i < workers; i++) {
-        mk_sched_launch_thread(config->worker_capacity, &ctx->workers[i], ctx);
+	    printf("Launghing worker\n");
+        mk_sched_launch_thread(ctx->config->worker_capacity, &ctx->workers[i], ctx, NULL);
     }
 
     /* Wait until all workers report as ready */
@@ -479,18 +486,18 @@ int mklib_stop(mklib_ctx ctx)
     pthread_cancel(ctx->tid);
 
     int i;
-    for (i = 0; i < config->workers; i++) {
+    for (i = 0; i < ctx->config->workers; i++) {
         pthread_cancel(ctx->workers[i]);
         free(ctx->worker_info[i]);
     }
     free(ctx->worker_info);
 
-    mk_plugin_exit_all();
+    mk_plugin_exit_all(ctx->config);
 
 #ifdef SAFE_FREE
-    mk_config_free_all();
+    mk_config_free_all(ctx->config);
 #else
-    free(config);
+    free(ctx->config);
 #endif
 
     free(ctx->workers);
@@ -521,7 +528,7 @@ struct mklib_vhost **mklib_vhost_list(mklib_ctx ctx)
     }
 
     /* How many are there? */
-    mk_list_foreach(head_vhost, &config->hosts) {
+    mk_list_foreach(head_vhost, &ctx->config->hosts) {
         total++;
     }
     total++;
@@ -531,7 +538,7 @@ struct mklib_vhost **mklib_vhost_list(mklib_ctx ctx)
     total = 0;
 
     /* Set up the list to return */
-    mk_list_foreach(head_vhost, &config->hosts) {
+    mk_list_foreach(head_vhost, &ctx->config->hosts) {
         entry_host = mk_list_entry(head_vhost, struct host, _head);
 
         lst[total] = mk_mem_malloc_z(sizeof(struct mklib_vhost));
@@ -565,7 +572,7 @@ struct mklib_vhost **mklib_vhost_list(mklib_ctx ctx)
 struct mklib_worker_info **mklib_scheduler_worker_info(mklib_ctx ctx)
 {
     unsigned int i;
-    const unsigned int workers = config->workers;
+    const unsigned int workers = ctx->config->workers;
 
     if (!ctx || !ctx->lib_running) return NULL;
 

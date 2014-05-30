@@ -287,14 +287,14 @@ struct handler
 };
 
 int mk_request_header_toc_parse(struct headers_toc *toc, const char *data, int len);
-mk_ptr_t mk_request_index(char *pathfile, char *file_aux, const unsigned int flen);
+mk_ptr_t mk_request_index(char *pathfile, char *file_aux, const unsigned int flen, struct server_config *config);
 mk_ptr_t mk_request_header_get(struct headers_toc *toc,
                                  const char *key_name, int key_len);
 
 int mk_request_error(int http_status, struct client_session *cs,
-                     struct session_request *sr);
+                     struct session_request *sr, struct server_config *config);
 
-void mk_request_free_list(struct client_session *cs);
+void mk_request_free_list(struct client_session *cs, struct server_config *config);
 
 struct client_session *mk_session_create(int socket, struct sched_list_node *sched);
 struct client_session *mk_session_get(int socket);
@@ -302,8 +302,8 @@ void mk_session_remove(int socket);
 
 void mk_request_init_error_msgs(void);
 
-int mk_handler_read(int socket, struct client_session *cs);
-int mk_handler_write(int socket, struct client_session *cs);
+int mk_handler_read(int socket, struct client_session *cs, struct server_config *config);
+int mk_handler_write(int socket, struct client_session *cs, struct server_config *config);
 
 void mk_request_ka_next(struct client_session *cs);
 #endif

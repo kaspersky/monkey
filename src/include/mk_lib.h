@@ -36,6 +36,7 @@ struct mklib_ctx_t {
     cb_close closef;
 
     struct mklib_worker_info **worker_info;
+    struct server_config *config;
 
     const char *plugdir;
 

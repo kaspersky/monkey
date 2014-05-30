@@ -20,6 +20,7 @@
 #include "mk_memory.h"
 #include "mk_list.h"
 #include "mk_rbtree.h"
+#include "mk_config.h"
 
 #ifndef MK_MIMETYPE_H
 #define MK_MIMETYPE_H
@@ -43,7 +44,7 @@ struct rb_root mimetype_rb_head;
 extern struct mimetype *mimetype_default;
 
 int mk_mimetype_add(char *name, const char *type);
-void mk_mimetype_read_config(void);
+void mk_mimetype_read_config(struct server_config *config);
 struct mimetype *mk_mimetype_find(mk_ptr_t * filename);
 struct mimetype *mk_mimetype_lookup(char *name);
 

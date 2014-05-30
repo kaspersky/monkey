@@ -20,6 +20,9 @@
 #ifndef MK_KERNEL_H
 #define MK_KERNEL_H
 
+/* Forward declaration */
+struct server_config;
+
 /* Server features: depends on server setup and Linux Kernel version */
 #define MK_KERNEL_TCP_FASTOPEN      1
 #define MK_KERNEL_SO_REUSEPORT      2
@@ -32,7 +35,7 @@ int mk_kernel_runver;
 
 int mk_kernel_init();
 int mk_kernel_version();
-int mk_kernel_features();
-int mk_kernel_features_print(char *buffer, size_t size);
+int mk_kernel_features(struct server_config *config);
+int mk_kernel_features_print(char *buffer, size_t size, struct server_config *config);
 
 #endif

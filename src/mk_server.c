@@ -67,18 +67,18 @@ unsigned int mk_server_worker_capacity(unsigned short nworkers)
 #ifndef SHAREDLIB
 
 /* Here we launch the worker threads to attend clients */
-void mk_server_launch_workers()
+void mk_server_launch_workers(struct server_config *config)
 {
     int i;
     pthread_t skip;
 
     /* Launch workers */
     for (i = 0; i < config->workers; i++) {
-        mk_sched_launch_thread(config->worker_capacity, &skip, NULL);
+        mk_sched_launch_thread(config->worker_capacity, &skip, NULL, config);
     }
 }
 
-void mk_server_loop(int server_fd)
+void mk_server_loop(int server_fd, struct server_config *config)
 {
     int ret;
     int remote_fd;
@@ -119,7 +119,7 @@ void mk_server_loop(int server_fd)
 #endif
 
         /* Assign socket to worker thread */
-        ret = mk_sched_add_client(remote_fd);
+        ret = mk_sched_add_client(remote_fd, config);
         if (ret == -1) {
             mk_socket_close(remote_fd);
         }

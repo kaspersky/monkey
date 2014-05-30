@@ -47,7 +47,7 @@ static __thread struct mk_list *mk_vhost_fdt_key;
  * This function is triggered upon thread creation (inside the thread
  * context), here we configure per-thread data.
  */
-int mk_vhost_fdt_worker_init()
+int mk_vhost_fdt_worker_init(struct server_config *config)
 {
     int i;
     int j;
@@ -150,7 +150,7 @@ struct vhost_fdt_hash_chain
 
 
 static inline int mk_vhost_fdt_open(int id, unsigned int hash,
-                                    struct session_request *sr)
+                                    struct session_request *sr, struct server_config *config)
 {
     int i;
     int fd;
@@ -208,7 +208,7 @@ static inline int mk_vhost_fdt_open(int id, unsigned int hash,
     return -1;
 }
 
-static inline int mk_vhost_fdt_close(struct session_request *sr)
+static inline int mk_vhost_fdt_close(struct session_request *sr, struct server_config *config)
 {
     int id;
     unsigned int hash;
@@ -247,7 +247,7 @@ static inline int mk_vhost_fdt_close(struct session_request *sr)
 }
 
 
-int mk_vhost_open(struct session_request *sr)
+int mk_vhost_open(struct session_request *sr, struct server_config *config)
 {
     int id;
     int off;
@@ -260,21 +260,21 @@ int mk_vhost_open(struct session_request *sr)
                              sr->real_path.len - off);
     id   = (hash % VHOST_FDT_HASHTABLE_SIZE);
 
-    return mk_vhost_fdt_open(id, hash, sr);
+    return mk_vhost_fdt_open(id, hash, sr, config);
 }
 
-int mk_vhost_close(struct session_request *sr)
+int mk_vhost_close(struct session_request *sr, struct server_config *config)
 {
     //return close(sr->fd_file);
 
-    return mk_vhost_fdt_close(sr);
+    return mk_vhost_fdt_close(sr, config);
 }
 
 /*
  * Open a virtual host configuration file and return a structure with
  * definitions.
  */
-struct host *mk_vhost_read(char *path)
+struct host *mk_vhost_read(char *path, struct server_config *config)
 {
     unsigned long len = 0;
     char *tmp;
@@ -426,7 +426,7 @@ struct host *mk_vhost_read(char *path)
 }
 
 /* Given a configuration directory, start reading the virtual host entries */
-void mk_vhost_init(char *path)
+void mk_vhost_init(char *path, struct server_config *config)
 {
     DIR *dir;
     unsigned long len;
@@ -448,7 +448,7 @@ void mk_vhost_init(char *path)
 
     mk_string_build(&buf, &len, "%s/default", sites);
 
-    p_host = mk_vhost_read(buf);
+    p_host = mk_vhost_read(buf, config);
     if (!p_host) {
         mk_err("Error parsing main configuration file 'default'");
     }
@@ -479,7 +479,7 @@ void mk_vhost_init(char *path)
         file = NULL;
         mk_string_build(&file, &len, "%s/%s", sites, ent->d_name);
 
-        p_host = mk_vhost_read(file);
+        p_host = mk_vhost_read(file, config);
         mk_mem_free(file);
         if (!p_host) {
             continue;
@@ -494,7 +494,7 @@ void mk_vhost_init(char *path)
 
 
 /* Lookup a registered virtual host based on the given 'host' input */
-int mk_vhost_get(mk_ptr_t host, struct host **vhost, struct host_alias **alias)
+int mk_vhost_get(mk_ptr_t host, struct host **vhost, struct host_alias **alias, struct server_config *config)
 {
     struct host *entry_host;
     struct host_alias *entry_alias;
@@ -517,7 +517,7 @@ int mk_vhost_get(mk_ptr_t host, struct host **vhost, struct host_alias **alias)
 }
 
 #ifdef SAFE_FREE
-void mk_vhost_free_all()
+void mk_vhost_free_all(struct server_config *config)
 {
     struct host *host;
     struct host_alias *host_alias;

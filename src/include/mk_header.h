@@ -121,7 +121,7 @@ extern const mk_ptr_t mk_header_accept_ranges;
 extern const mk_ptr_t mk_header_te_chunked;
 extern const mk_ptr_t mk_header_last_modified;
 
-int mk_header_send(int fd, struct client_session *cs, struct session_request *sr);
+int mk_header_send(int fd, struct client_session *cs, struct session_request *sr, struct server_config *config);
 void mk_header_response_reset(struct response_headers *header);
 void mk_header_set_http_status(struct session_request *sr, int status);
 void mk_header_set_content_length(struct session_request *sr, long len);

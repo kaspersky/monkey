@@ -170,7 +170,7 @@ int mk_socket_accept(int server_fd)
     return plg_netiomap->accept(server_fd);
 }
 
-int mk_socket_sendv(int socket_fd, struct mk_iov *mk_io)
+int mk_socket_sendv(int socket_fd, struct mk_iov *mk_io, struct server_config *config)
 {
     int bytes;
     bytes = plg_netiomap->writev(socket_fd, mk_io);
@@ -181,7 +181,7 @@ int mk_socket_sendv(int socket_fd, struct mk_iov *mk_io)
     return bytes;
 }
 
-int mk_socket_send(int socket_fd, const void *buf, size_t count)
+int mk_socket_send(int socket_fd, const void *buf, size_t count, struct server_config *config)
 {
     int bytes;
     bytes = plg_netiomap->write(socket_fd, buf, count);
@@ -198,7 +198,7 @@ int mk_socket_read(int socket_fd, void *buf, int count)
 }
 
 int mk_socket_send_file(int socket_fd, int file_fd, off_t *file_offset,
-                        size_t file_count)
+                        size_t file_count, struct server_config *config)
 {
     int bytes;
 

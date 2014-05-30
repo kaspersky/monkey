@@ -215,7 +215,7 @@ int _mkp_stage_30(struct plugin *plugin,
     mk_api->header_add(sr,
                        loc_entry->auth_http_header.data,
                        loc_entry->auth_http_header.len);
-    mk_api->header_send(cs->socket, cs, sr);
+    mk_api->header_send(cs->socket, cs, sr, mk_api->config);
 
     return MK_PLUGIN_RET_END;
 }

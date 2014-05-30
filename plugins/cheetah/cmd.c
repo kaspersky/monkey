@@ -424,7 +424,7 @@ void mk_cheetah_cmd_status()
     CHEETAH_WRITE("Worker Threads     : %i (per configuration: %i)\n",
            nthreads, mk_api->config->workers);
 
-    if (mk_api->kernel_features_print(tmp, sizeof(tmp)) > 0) {
+    if (mk_api->kernel_features_print(tmp, sizeof(tmp), mk_api->config) > 0) {
         CHEETAH_WRITE("Kernel Features    : %s\n", tmp);
     }
     CHEETAH_WRITE("\n");

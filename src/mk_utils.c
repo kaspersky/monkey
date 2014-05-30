@@ -446,7 +446,7 @@ int mk_utils_print_errno(int n)
 #ifndef SHAREDLIB
 
 /* Run current process in background mode (daemon, evil Monkey >:) */
-int mk_utils_set_daemon()
+int mk_utils_set_daemon(struct server_config *config)
 {
     pid_t pid;
 
@@ -470,7 +470,7 @@ int mk_utils_set_daemon()
 	}
 
     /* Our last STDOUT messages */
-    mk_details();
+    mk_details(config);
     mk_info("Background mode ON");
 
     fclose(stderr);
@@ -480,7 +480,7 @@ int mk_utils_set_daemon()
 }
 
 /* Write Monkey's PID */
-int mk_utils_register_pid()
+int mk_utils_register_pid(struct server_config *config)
 {
     int fd;
     char pidstr[MK_MAX_PID_LEN];
@@ -530,13 +530,13 @@ int mk_utils_register_pid()
 }
 
 /* Remove PID file */
-int mk_utils_remove_pid()
+int mk_utils_remove_pid(struct server_config *config)
 {
     unsigned long len = 0;
     char *filepath = NULL;
 
     mk_string_build(&filepath, &len, "%s.%d", config->pid_file_path, config->serverport);
-    mk_user_undo_uidgid();
+    mk_user_undo_uidgid(config);
     if (unlink(filepath)) {
         mk_warn("cannot delete pidfile\n");
     }

@@ -232,7 +232,7 @@ struct plugin *mk_plugin_alloc(void *handler, const char *path)
 /* Load the plugins and set the library symbols to the
  * local struct plugin *p node
  */
-struct plugin *mk_plugin_register(struct plugin *p)
+struct plugin *mk_plugin_register(struct plugin *p, struct server_config *config)
 {
     if (!p->name || !p->version || !p->hooks) {
         MK_TRACE("Plugin must define name, version and hooks. Check: %s", p->path);
@@ -303,7 +303,7 @@ void mk_plugin_free(struct plugin *p)
     p = NULL;
 }
 
-void mk_plugin_init()
+void mk_plugin_init(struct server_config *config)
 {
     api = mk_mem_malloc_z(sizeof(struct plugin_api));
     __builtin_prefetch(api);
@@ -434,7 +434,7 @@ void mk_plugin_init()
 
 #ifndef SHAREDLIB
 
-void mk_plugin_read_config()
+void mk_plugin_read_config(struct server_config *config)
 {
     int ret;
     char *path;
@@ -513,7 +513,7 @@ void mk_plugin_read_config()
             plugin_confdir = NULL;
 
             /* If everything worked, register plugin */
-            mk_plugin_register(p);
+            mk_plugin_register(p, config);
         }
     }
 
@@ -528,7 +528,7 @@ void mk_plugin_read_config()
     }
 
     /* Look for plugins thread key data */
-    mk_plugin_preworker_calls();
+    mk_plugin_preworker_calls(config);
     mk_mem_free(path);
     mk_config_free(cnf);
 }
@@ -536,7 +536,7 @@ void mk_plugin_read_config()
 #endif //!SHAREDLIB
 
 /* Invoke all plugins 'exit' hook and free resources by the plugin interface */
-void mk_plugin_exit_all()
+void mk_plugin_exit_all(struct server_config *config)
 {
     struct plugin *node;
     struct mk_list *head, *tmp;
@@ -561,7 +561,8 @@ void mk_plugin_exit_all()
 int mk_plugin_stage_run(unsigned int hook,
                         unsigned int socket,
                         struct sched_connection *conx,
-                        struct client_session *cs, struct session_request *sr)
+                        struct client_session *cs,
+			struct session_request *sr, struct server_config *config UNUSED_PARAM)
 {
     int ret;
     struct plugin_stagem *stm;
@@ -728,11 +729,11 @@ int mk_plugin_stage_run(unsigned int hook,
         sr->headers.content_length = clen;
         len = strlen(header);
         if (len) api->header_add(sr, header, len);
-        api->header_send(socket, cs, sr);
+        api->header_send(socket, cs, sr, config);
 
         /* Data */
         while (clen > 0) {
-            int remaining = api->socket_send(socket, content, clen);
+            int remaining = api->socket_send(socket, content, clen, config);
             if (remaining < 0) {
                 /*
                  * FIXME: This is a temporal fix to send out the data,
@@ -766,7 +767,7 @@ int mk_plugin_stage_run(unsigned int hook,
  * for plugins which need to set some data under a thread
  * context
  */
-void mk_plugin_core_process()
+void mk_plugin_core_process(struct server_config *config)
 {
     struct plugin *node;
     struct mk_list *head;
@@ -785,7 +786,7 @@ void mk_plugin_core_process()
  * for plugins which need to set some data under a thread
  * context
  */
-void mk_plugin_core_thread()
+void mk_plugin_core_thread(struct server_config *config)
 {
 
     struct plugin *node;
@@ -805,7 +806,7 @@ void mk_plugin_core_thread()
  * thread context for plugins, so here's the right
  * place to set pthread keys or similar
  */
-void mk_plugin_preworker_calls()
+void mk_plugin_preworker_calls(struct server_config *config)
 {
     int ret;
     struct plugin *node;
@@ -887,7 +888,7 @@ int mk_plugin_event_add(int socket, int mode,
     return mk_epoll_add(sched->epoll_fd, socket, mode, behavior);
 }
 
-int mk_plugin_http_request_end(int socket)
+int mk_plugin_http_request_end(int socket, struct server_config *config)
 {
     int ret;
     int con;
@@ -906,13 +907,13 @@ int mk_plugin_http_request_end(int socket)
         return -1;
     }
     sr = mk_list_entry_last(&cs->request_list, struct session_request, _head);
-    mk_plugin_stage_run(MK_PLUGIN_STAGE_40, socket, NULL, cs, sr);
+    mk_plugin_stage_run(MK_PLUGIN_STAGE_40, socket, NULL, cs, sr, config);
 
-    ret = mk_http_request_end(socket);
+    ret = mk_http_request_end(socket, config);
     MK_TRACE(" ret = %i", ret);
 
     if (ret < 0) {
-        con = mk_conn_close(socket, MK_EP_SOCKET_CLOSED);
+        con = mk_conn_close(socket, MK_EP_SOCKET_CLOSED, config);
         if (con != 0) {
             return con;
         }
@@ -1023,7 +1024,7 @@ int mk_plugin_event_check_return(const char *hook, int ret)
     return -1;
 }
 
-int mk_plugin_event_read(int socket)
+int mk_plugin_event_read(int socket, struct server_config *config)
 {
     int ret;
     struct plugin *node;
@@ -1073,7 +1074,7 @@ int mk_plugin_event_read(int socket)
     return MK_PLUGIN_RET_EVENT_CONTINUE;
 }
 
-int mk_plugin_event_write(int socket)
+int mk_plugin_event_write(int socket, struct server_config *config)
 {
     int ret;
     struct plugin *node;
@@ -1122,7 +1123,7 @@ int mk_plugin_event_write(int socket)
     return MK_PLUGIN_RET_CONTINUE;
 }
 
-int mk_plugin_event_error(int socket)
+int mk_plugin_event_error(int socket, struct server_config *config)
 {
     int ret;
     struct plugin *node;
@@ -1161,7 +1162,7 @@ int mk_plugin_event_error(int socket)
     return MK_PLUGIN_RET_CONTINUE;
 }
 
-int mk_plugin_event_close(int socket)
+int mk_plugin_event_close(int socket, struct server_config *config)
 {
     int ret;
     struct plugin *node;
@@ -1200,7 +1201,7 @@ int mk_plugin_event_close(int socket)
     return MK_PLUGIN_RET_CONTINUE;
 }
 
-int mk_plugin_event_timeout(int socket)
+int mk_plugin_event_timeout(int socket, struct server_config *config)
 {
     int ret;
     struct plugin *node;
@@ -1249,14 +1250,14 @@ mk_ptr_t *mk_plugin_time_now_human()
     return &log_current_time;
 }
 
-int mk_plugin_sched_remove_client(int socket)
+int mk_plugin_sched_remove_client(int socket, struct server_config *config)
 {
     struct sched_list_node *node;
 
     MK_TRACE("[FD %i] remove client", socket);
 
     node = mk_sched_get_thread_conf();
-    return mk_sched_remove_client(node, socket);
+    return mk_sched_remove_client(node, socket, config);
 }
 
 int mk_plugin_header_add(struct session_request *sr, char *row, int len)

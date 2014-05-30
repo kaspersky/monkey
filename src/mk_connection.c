@@ -21,8 +21,9 @@
 #include "mk_http.h"
 #include "mk_plugin.h"
 #include "mk_macros.h"
+#include "mk_config.h"
 
-int mk_conn_read(int socket)
+int mk_conn_read(int socket, struct server_config *config)
 {
     int ret;
     struct client_session *cs;
@@ -31,7 +32,7 @@ int mk_conn_read(int socket)
     MK_TRACE("[FD %i] Connection Handler / read", socket);
 
     /* Plugin hook */
-    ret = mk_plugin_event_read(socket);
+    ret = mk_plugin_event_read(socket, config);
 
     switch(ret) {
     case MK_PLUGIN_RET_EVENT_OWNED:
@@ -48,7 +49,7 @@ int mk_conn_read(int socket)
         /* Check if is this a new connection for the Scheduler */
         if (!mk_sched_get_connection(sched, socket)) {
             MK_TRACE("[FD %i] Registering new connection");
-            if (mk_sched_register_client(socket, sched) == -1) {
+            if (mk_sched_register_client(socket, sched, config) == -1) {
                 MK_TRACE("[FD %i] Close requested", socket);
                 return -1;
             }
@@ -72,9 +73,9 @@ int mk_conn_read(int socket)
     }
 
     /* Read incomming data */
-    ret = mk_handler_read(socket, cs);
+    ret = mk_handler_read(socket, cs, config);
     if (ret > 0) {
-        if (mk_http_pending_request(cs) == 0) {
+        if (mk_http_pending_request(cs, config) == 0) {
             mk_epoll_change_mode(sched->epoll_fd,
                                  socket, MK_EPOLL_WRITE, MK_EPOLL_LEVEL_TRIGGERED);
         }
@@ -94,7 +95,7 @@ int mk_conn_read(int socket)
     return ret;
 }
 
-int mk_conn_write(int socket)
+int mk_conn_write(int socket, struct server_config *config)
 {
     int ret = -1;
     struct client_session *cs;
@@ -104,7 +105,7 @@ int mk_conn_write(int socket)
     MK_TRACE("[FD %i] Connection Handler / write", socket);
 
     /* Plugin hook */
-    ret = mk_plugin_event_write(socket);
+    ret = mk_plugin_event_write(socket, config);
     switch(ret) {
     case MK_PLUGIN_RET_EVENT_OWNED:
         return MK_PLUGIN_RET_CONTINUE;
@@ -120,7 +121,7 @@ int mk_conn_write(int socket)
     conx = mk_sched_get_connection(sched, socket);
     if (!conx) {
         MK_TRACE("[FD %i] Registering new connection");
-        if (mk_sched_register_client(socket, sched) == -1) {
+        if (mk_sched_register_client(socket, sched, config) == -1) {
             MK_TRACE("[FD %i] Close requested", socket);
             return -1;
         }
@@ -141,11 +142,11 @@ int mk_conn_write(int socket)
          * Closing it could accidentally close some other thread's
          * socket, so pass it to remove_client that checks it's ours.
          */
-        mk_sched_remove_client(sched, socket);
+        mk_sched_remove_client(sched, socket, config);
         return 0;
     }
 
-    ret = mk_handler_write(socket, cs);
+    ret = mk_handler_write(socket, cs, config);
 
     /* if ret < 0, means that some error
      * happened in the writer call, in the
@@ -154,12 +155,12 @@ int mk_conn_write(int socket)
      * still need to be send.
      */
     if (ret < 0) {
-        mk_request_free_list(cs);
+        mk_request_free_list(cs, config);
         mk_session_remove(socket);
         return -1;
     }
     else if (ret == 0) {
-        return mk_http_request_end(socket);
+        return mk_http_request_end(socket, config);
     }
     else if (ret > 0) {
         return 0;
@@ -169,7 +170,7 @@ int mk_conn_write(int socket)
     return -1;
 }
 
-int mk_conn_close(int socket, int event)
+int mk_conn_close(int socket, int event, struct server_config *config)
 {
     struct sched_list_node *sched;
 
@@ -180,20 +181,20 @@ int mk_conn_close(int socket, int event)
      * to disable all notifications.
      */
     sched = mk_sched_get_thread_conf();
-    mk_sched_remove_client(sched, socket);
+    mk_sched_remove_client(sched, socket, config);
 
     /* Plugin hook: this is a wrap-workaround to do not
      * break plugins until the whole interface events and
      * return values are re-worked.
      */
     if (event == MK_EP_SOCKET_CLOSED) {
-        mk_plugin_event_close(socket);
+        mk_plugin_event_close(socket, config);
     }
     else if (event == MK_EP_SOCKET_ERROR) {
-        mk_plugin_event_error(socket);
+        mk_plugin_event_error(socket, config);
     }
     else if (event == MK_EP_SOCKET_TIMEOUT) {
-        mk_plugin_event_timeout(socket);
+        mk_plugin_event_timeout(socket, config);
     }
 
     return 0;

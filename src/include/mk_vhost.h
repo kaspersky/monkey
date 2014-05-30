@@ -85,15 +85,15 @@ struct vhost_fdt_host {
 //pthread_key_t mk_vhost_fdt_key;
 pthread_mutex_t mk_vhost_fdt_mutex;
 
-struct host *mk_vhost_read(char *path);
-int mk_vhost_get(mk_ptr_t host, struct host **vhost, struct host_alias **alias);
-void mk_vhost_init(char *path);
-int mk_vhost_fdt_worker_init();
-int mk_vhost_open(struct session_request *sr);
-int mk_vhost_close(struct session_request *sr);
+struct host *mk_vhost_read(char *path, struct server_config *config);
+int mk_vhost_get(mk_ptr_t host, struct host **vhost, struct host_alias **alias, struct server_config *config);
+void mk_vhost_init(char *path, struct server_config *config);
+int mk_vhost_fdt_worker_init(struct server_config *config);
+int mk_vhost_open(struct session_request *sr, struct server_config *config);
+int mk_vhost_close(struct session_request *sr, struct server_config *config);
 
 #ifdef SAFE_FREE
-void mk_vhost_free_all();
+void mk_vhost_free_all(struct server_config *config);
 #endif
 
 #endif

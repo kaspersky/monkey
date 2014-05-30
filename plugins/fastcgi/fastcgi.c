@@ -388,7 +388,7 @@ int fcgi_send_response_headers(struct request *req)
           "Failed to drop from req->iov.");
 	req->sr->headers.content_length = chunk_iov_length(&req->iov);
 
-	mk_api->header_send(req->fd, req->cs, req->sr);
+	mk_api->header_send(req->fd, req->cs, req->sr, mk_api->config);
 	req->sr->headers.location = NULL;
 
 	request_set_flag(req, REQ_HEADERS_SENT);
@@ -412,7 +412,7 @@ int fcgi_send_response(struct request *req)
     mkiov.io = req->iov.io;
     mkiov.iov_idx = req->iov.index;
     mkiov.total_len = chunk_iov_length(&req->iov);
-	ret = mk_api->socket_sendv(fd, &mkiov);
+	ret = mk_api->socket_sendv(fd, &mkiov, mk_api->config);
 
 	PLUGIN_TRACE("[FD %d] Wrote %ld bytes.", fd, ret);
 	check(ret != -1, "[FD %d] Failed to send request response.", fd);
@@ -423,7 +423,7 @@ int fcgi_send_response(struct request *req)
 		request_recycle(req);
 
 		mk_api->socket_cork_flag(fd, TCP_CORK_OFF);
-		mk_api->http_request_end(fd);
+		mk_api->http_request_end(fd, mk_api->config);
 	}
 	else {
 		check(!chunk_iov_drop(&req->iov, ret),
@@ -908,12 +908,12 @@ int _mkp_event_write(int socket)
 #endif
 
 		mk_api->http_request_error(MK_SERVER_INTERNAL_ERROR,
-                                   req->cs, req->sr);
+                                   req->cs, req->sr, mk_api->config);
 
 		if (req->fcgi_fd == -1) {
 			request_recycle(req);
 		}
-		mk_api->http_request_end(socket);
+		mk_api->http_request_end(socket, mk_api->config);
 
 		return MK_PLUGIN_RET_EVENT_OWNED;
 	}

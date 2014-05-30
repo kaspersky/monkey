@@ -45,7 +45,6 @@
 #include "mk_macros.h"
 #include "mk_vhost.h"
 
-struct server_config *config;
 gid_t EGID;
 gid_t EUID;
 
@@ -308,9 +307,9 @@ void mk_config_free_entries(struct mk_config_section *section)
 }
 
 #ifdef SAFE_FREE
-void mk_config_free_all()
+void mk_config_free_all(struct server_config *config)
 {
-    mk_vhost_free_all();
+    mk_vhost_free_all(config);
     if (config->config) mk_config_free(config->config);
 
     if (config->serverconf) mk_mem_free(config->serverconf);
@@ -368,7 +367,7 @@ void *mk_config_section_getval(struct mk_config_section *section, char *key, int
 
 #ifndef SHAREDLIB
 
-void mk_details(void)
+void mk_details(struct server_config *config)
 {
     char tmp[64];
 
@@ -383,7 +382,7 @@ void mk_details(void)
            config->transport_layer_plugin->shortname,
            config->transport);
 
-    if (mk_kernel_features_print(tmp, sizeof(tmp)) > 0) {
+    if (mk_kernel_features_print(tmp, sizeof(tmp), config) > 0) {
         printf(MK_BANNER_ENTRY "Linux Features: %s\n", tmp);
     }
     fflush(stdout);
@@ -398,7 +397,7 @@ static void mk_config_print_error_msg(char *variable, char *path)
 }
 
 /* Read configuration files */
-static void mk_config_read_files(char *path_conf, char *file_conf)
+static void mk_config_read_files(char *path_conf, char *file_conf, struct server_config *config)
 {
     unsigned long len;
     char *tmp = NULL;
@@ -564,19 +563,19 @@ static void mk_config_read_files(char *path_conf, char *file_conf)
     config->fdt = (size_t) mk_config_section_getval(section,
                                                     "FDT",
                                                     MK_CONFIG_VAL_BOOL);
-    mk_vhost_init(path_conf);
+    mk_vhost_init(path_conf, config);
 }
 
 /* read main configuration from monkey.conf */
-void mk_config_start_configure(void)
+void mk_config_start_configure(struct server_config *config)
 {
     unsigned long len;
 
-    mk_config_set_init_values();
-    mk_config_read_files(config->path_config, config->server_conf_file);
+    mk_config_set_init_values(config);
+    mk_config_read_files(config->path_config, config->server_conf_file, config); // TODO
 
     /* Load mimes */
-    mk_mimetype_read_config();
+    mk_mimetype_read_config(config);
 
     mk_ptr_t_reset(&config->server_software);
 
@@ -594,7 +593,7 @@ void mk_config_start_configure(void)
 
 #endif // !SHAREDLIB
 
-void mk_config_set_init_values(void)
+void mk_config_set_init_values(struct server_config *config)
 {
     /* Init values */
     config->is_seteuid = MK_FALSE;
@@ -658,7 +657,7 @@ void mk_config_set_init_values(void)
 }
 
 
-void mk_config_sanity_check()
+void mk_config_sanity_check(struct server_config *config)
 {
     /* Check O_NOATIME for current user, flag will just be used
      * if running user is allowed to.

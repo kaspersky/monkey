@@ -96,10 +96,10 @@ static inline void mk_request_init(struct session_request *request)
     mk_header_response_reset(&request->headers);
 }
 
-static inline void mk_request_free(struct session_request *sr)
+static inline void mk_request_free(struct session_request *sr, struct server_config *config)
 {
     if (sr->fd_file > 0) {
-        mk_vhost_close(sr);
+        mk_vhost_close(sr, config);
     }
 
     if (sr->headers.location) {
@@ -180,7 +180,7 @@ int mk_request_header_toc_parse(struct headers_toc *toc, const char *data, int l
 
 /* Return a struct with method, URI , protocol version
 and all static headers defined here sent in request */
-static int mk_request_header_process(struct session_request *sr)
+static int mk_request_header_process(struct session_request *sr, struct server_config *config)
 {
     int uri_init = 0, uri_end = 0;
     int query_init = 0;
@@ -474,7 +474,7 @@ static int mk_request_parse(struct client_session *cs)
  * when some connection was not proceesed due to a premature close or similar
  * exception, it also take care of invoke the STAGE_40 and STAGE_50 plugins events
  */
-static void mk_request_premature_close(int http_status, struct client_session *cs)
+static void mk_request_premature_close(int http_status, struct client_session *cs, struct server_config *config)
 {
     struct session_request *sr;
     struct mk_list *sr_list = &cs->request_list;
@@ -499,19 +499,19 @@ static void mk_request_premature_close(int http_status, struct client_session *c
         if (!sr->host_conf) {
             sr->host_conf = mk_list_entry_first(host_list, struct host, _head);
         }
-        mk_request_error(http_status, cs, sr);
+        mk_request_error(http_status, cs, sr, config);
 
         /* STAGE_40, request has ended */
         mk_plugin_stage_run(MK_PLUGIN_STAGE_40, cs->socket,
-                            NULL, cs, sr);
+                            NULL, cs, sr, config);
     }
 
     /* STAGE_50, connection closed  and remove client_session*/
-    mk_plugin_stage_run(MK_PLUGIN_STAGE_50, cs->socket, NULL, NULL, NULL);
+    mk_plugin_stage_run(MK_PLUGIN_STAGE_50, cs->socket, NULL, NULL, NULL, config);
     mk_session_remove(cs->socket);
 }
 
-static int mk_request_process(struct client_session *cs, struct session_request *sr)
+static int mk_request_process(struct client_session *cs, struct session_request *sr, struct server_config *config)
 {
     int status = 0;
     int socket = cs->socket;
@@ -522,10 +522,10 @@ static int mk_request_process(struct client_session *cs, struct session_request 
     sr->host_conf = mk_list_entry_first(hosts, struct host, _head);
 
     /* Parse request */
-    status = mk_request_header_process(sr);
+    status = mk_request_header_process(sr, config);
     if (status < 0) {
         mk_header_set_http_status(sr, MK_CLIENT_BAD_REQUEST);
-        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr);
+        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr, config);
         return EXIT_ABORT;
     }
 
@@ -533,19 +533,19 @@ static int mk_request_process(struct client_session *cs, struct session_request 
 
     /* Valid request URI? */
     if (sr->uri_processed.data[0] != '/') {
-        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr);
+        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr, config);
         return EXIT_NORMAL;
     }
 
     /* HTTP/1.1 needs Host header */
     if (!sr->host.data && sr->protocol == MK_HTTP_PROTOCOL_11) {
-        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr);
+        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr, config);
         return EXIT_NORMAL;
     }
 
     /* Validating protocol version */
     if (sr->protocol == MK_HTTP_PROTOCOL_UNKNOWN) {
-        mk_request_error(MK_SERVER_HTTP_VERSION_UNSUP, cs, sr);
+        mk_request_error(MK_SERVER_HTTP_VERSION_UNSUP, cs, sr, config);
         return EXIT_ABORT;
     }
 
@@ -556,16 +556,16 @@ static int mk_request_process(struct client_session *cs, struct session_request 
 
     if (sr->host.data) {
         /* Match the virtual host */
-        mk_vhost_get(sr->host, &sr->host_conf, &sr->host_alias);
+        mk_vhost_get(sr->host, &sr->host_conf, &sr->host_alias, config);
 
         /* Check if this virtual host have some redirection */
         if (sr->host_conf->header_redirect.data) {
             mk_header_set_http_status(sr, MK_REDIR_MOVED);
             sr->headers.location = mk_string_dup(sr->host_conf->header_redirect.data);
             sr->headers.content_length = 0;
-            mk_header_send(cs->socket, cs, sr);
+            mk_header_send(cs->socket, cs, sr, config);
             sr->headers.location = NULL;
-            mk_server_cork_flag(cs->socket, TCP_CORK_OFF);
+            mk_server_cork_flag(cs->socket, TCP_CORK_OFF, config);
             return 0;
         }
     }
@@ -575,29 +575,29 @@ static int mk_request_process(struct client_session *cs, struct session_request 
         sr->uri_processed.len > 2 &&
         sr->uri_processed.data[1] == MK_USER_HOME) {
 
-        if (mk_user_init(cs, sr) != 0) {
-            mk_request_error(MK_CLIENT_NOT_FOUND, cs, sr);
+        if (mk_user_init(cs, sr, config) != 0) {
+            mk_request_error(MK_CLIENT_NOT_FOUND, cs, sr, config);
             return EXIT_ABORT;
         }
     }
 
     /* Handling method requested */
     if (sr->method == MK_HTTP_METHOD_POST || sr->method == MK_HTTP_METHOD_PUT) {
-        if ((status = mk_method_parse_data(cs, sr)) != 0) {
+        if ((status = mk_method_parse_data(cs, sr, config)) != 0) {
             return status;
         }
     }
 
     /* Plugins Stage 20 */
     int ret;
-    ret = mk_plugin_stage_run(MK_PLUGIN_STAGE_20, socket, NULL, cs, sr);
+    ret = mk_plugin_stage_run(MK_PLUGIN_STAGE_20, socket, NULL, cs, sr, config);
     if (ret == MK_PLUGIN_RET_CLOSE_CONX) {
         MK_TRACE("STAGE 20 requested close conexion");
         return EXIT_ABORT;
     }
 
     /* Normal HTTP process */
-    status = mk_http_init(cs, sr);
+    status = mk_http_init(cs, sr, config);
 
     MK_TRACE("[FD %i] HTTP Init returning %i", socket, status);
 
@@ -623,7 +623,7 @@ static mk_ptr_t *mk_request_set_default_page(char *title, mk_ptr_t message,
     return p;
 }
 
-int mk_handler_read(int socket, struct client_session *cs)
+int mk_handler_read(int socket, struct client_session *cs, struct server_config *config)
 {
     int bytes;
     int available = 0;
@@ -638,7 +638,7 @@ int mk_handler_read(int socket, struct client_session *cs)
         new_size = cs->body_size + MK_REQUEST_CHUNK;
         if (new_size >= config->max_request_size) {
             MK_TRACE("Requested size is > config->max_request_size");
-            mk_request_premature_close(MK_CLIENT_REQUEST_ENTITY_TOO_LARGE, cs);
+            mk_request_premature_close(MK_CLIENT_REQUEST_ENTITY_TOO_LARGE, cs, config);
             return -1;
         }
 
@@ -662,7 +662,7 @@ int mk_handler_read(int socket, struct client_session *cs)
                 cs->body_size = new_size;
             }
             else {
-                mk_request_premature_close(MK_SERVER_INTERNAL_ERROR, cs);
+                mk_request_premature_close(MK_SERVER_INTERNAL_ERROR, cs, config);
                 return -1;
             }
         }
@@ -696,7 +696,7 @@ int mk_handler_read(int socket, struct client_session *cs)
     return bytes;
 }
 
-int mk_handler_write(int socket, struct client_session *cs)
+int mk_handler_write(int socket, struct client_session *cs, struct server_config *config)
 {
     int final_status = 0;
     struct session_request *sr_node;
@@ -714,10 +714,10 @@ int mk_handler_write(int socket, struct client_session *cs)
 
         if (sr_node->bytes_to_send > 0) {
             /* Request with data to send by static file sender */
-            final_status = mk_http_send_file(cs, sr_node);
+            final_status = mk_http_send_file(cs, sr_node, config);
         }
         else if (sr_node->bytes_to_send < 0) {
-            final_status = mk_request_process(cs, sr_node);
+            final_status = mk_request_process(cs, sr_node, config);
         }
 
         /*
@@ -730,7 +730,7 @@ int mk_handler_write(int socket, struct client_session *cs)
         else {
             /* STAGE_40, request has ended */
             mk_plugin_stage_run(MK_PLUGIN_STAGE_40, socket,
-                                NULL, cs, sr_node);
+                                NULL, cs, sr_node, config);
             switch (final_status) {
             case EXIT_NORMAL:
             case EXIT_ERROR:
@@ -752,7 +752,7 @@ int mk_handler_write(int socket, struct client_session *cs)
 }
 
 /* Look for some  index.xxx in pathfile */
-mk_ptr_t mk_request_index(char *pathfile, char *file_aux, const unsigned int flen)
+mk_ptr_t mk_request_index(char *pathfile, char *file_aux, const unsigned int flen, struct server_config *config)
 {
     unsigned long len;
     mk_ptr_t f;
@@ -782,7 +782,7 @@ mk_ptr_t mk_request_index(char *pathfile, char *file_aux, const unsigned int fle
 
 /* Send error responses */
 int mk_request_error(int http_status, struct client_session *cs,
-                     struct session_request *sr) {
+                     struct session_request *sr, struct server_config *config) {
     int ret, fd;
     mk_ptr_t message, *page = 0;
     struct error_page *entry;
@@ -825,8 +825,8 @@ int mk_request_error(int http_status, struct client_session *cs,
 
             memcpy(&sr->file_info, &finfo, sizeof(struct file_info));
 
-            mk_header_send(cs->socket, cs, sr);
-            return mk_http_send_file(cs, sr);
+            mk_header_send(cs->socket, cs, sr, config);
+            return mk_http_send_file(cs, sr, config);
         }
     }
 
@@ -909,22 +909,22 @@ int mk_request_error(int http_status, struct client_session *cs,
         mk_ptr_t_set(&sr->headers.content_type, "text/html\r\n");
     }
 
-    mk_header_send(cs->socket, cs, sr);
+    mk_header_send(cs->socket, cs, sr, config);
 
     if (page) {
         if (sr->method != MK_HTTP_METHOD_HEAD)
-            mk_socket_send(cs->socket, page->data, page->len);
+            mk_socket_send(cs->socket, page->data, page->len, config);
 
         mk_ptr_t_free(page);
         mk_mem_free(page);
     }
 
     /* Turn off TCP_CORK */
-    mk_server_cork_flag(cs->socket, TCP_CORK_OFF);
+    mk_server_cork_flag(cs->socket, TCP_CORK_OFF, config);
     return EXIT_ERROR;
 }
 
-void mk_request_free_list(struct client_session *cs)
+void mk_request_free_list(struct client_session *cs, struct server_config *config)
 {
     struct session_request *sr_node;
     struct mk_list *sr_head, *temp;
@@ -936,7 +936,7 @@ void mk_request_free_list(struct client_session *cs)
         sr_node = mk_list_entry(sr_head, struct session_request, _head);
         mk_list_del(sr_head);
 
-        mk_request_free(sr_node);
+        mk_request_free(sr_node, config);
         if (sr_node != &cs->sr_fixed) {
             mk_mem_free(sr_node);
         }

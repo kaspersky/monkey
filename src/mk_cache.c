@@ -40,7 +40,7 @@ pthread_key_t mk_cache_utils_gmt_text;
 pthread_key_t mk_utils_error_key;
 
 /* This function is called when a thread is created */
-void mk_cache_thread_init()
+void mk_cache_thread_init(struct server_config *config)
 {
     char *cache_error;
     mk_ptr_t *cache_header_lm;
@@ -94,5 +94,5 @@ void mk_cache_thread_init()
     pthread_setspecific(mk_utils_error_key, (void *) cache_error);
 
     /* Virtual hosts: initialize per thread-vhost data */
-    mk_vhost_fdt_worker_init();
+    mk_vhost_fdt_worker_init(config);
 }

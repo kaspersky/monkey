@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "mk_macros.h"
+#include "mk_config.h"
 
 #define MK_UTILS_INT2MKP_BUFFER_LEN 16    /* Maximum buffer length when
                                            * converting an int to mk_ptr_t */
@@ -67,7 +68,7 @@ time_t mk_utils_gmt2utime(char *date);
 
 int mk_buffer_cat(mk_ptr_t * p, char *buf1, int len1, char *buf2, int len2);
 
-int mk_utils_set_daemon(void);
+int mk_utils_set_daemon(struct server_config *config);
 char *mk_utils_url_decode(mk_ptr_t req_uri);
 
 #ifdef TRACE
@@ -76,8 +77,8 @@ void mk_utils_trace(const char *component, int color, const char *function,
 int mk_utils_print_errno(int n);
 #endif
 
-int mk_utils_register_pid(void);
-int mk_utils_remove_pid(void);
+int mk_utils_register_pid(struct server_config *config);
+int mk_utils_remove_pid(struct server_config *config);
 
 void mk_print(int type, const char *format, ...) PRINTF_WARNINGS(2,3);
 

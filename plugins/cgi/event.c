@@ -76,7 +76,7 @@ static void done(struct cgi_request * const r) {
     requests_by_socket[r->socket] = NULL;
 
     /* Note: Must make sure we ignore the close event caused by this line */
-    mk_api->http_request_end(r->socket);
+    mk_api->http_request_end(r->socket, mk_api->config);
     mk_api->socket_close(r->fd);
 
 
@@ -175,7 +175,7 @@ int _mkp_event_write(int socket)
                 }
             }
 
-            mk_api->header_send(socket, r->cs, r->sr);
+            mk_api->header_send(socket, r->cs, r->sr, mk_api->config);
 
             r->status_done = 1;
         }

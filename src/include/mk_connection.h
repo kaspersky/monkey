@@ -20,8 +20,11 @@
 #ifndef MK_CONNECTION_H
 #define MK_CONNECTION_H
 
-int mk_conn_read(int socket);
-int mk_conn_write(int socket);
-int mk_conn_close(int socket, int event);
+/* Forward declaration */
+struct server_config;
+
+int mk_conn_read(int socket, struct server_config *config);
+int mk_conn_write(int socket, struct server_config *config);
+int mk_conn_close(int socket, int event, struct server_config *config);
 
 #endif

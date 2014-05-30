@@ -17,17 +17,20 @@
  *  limitations under the License.
  */
 
-#include "mk_request.h"
-
 #ifndef MK_USER_H
 #define MK_USER_H
+
+#include "mk_request.h"
+
+/* Forward declaration */
+struct server_config;
 
 /* User home string */
 #define MK_USER_HOME '~'
 
 /* user.c */
-int mk_user_init(struct client_session *cs, struct session_request *sr);
-int mk_user_set_uidgid(void);
-int mk_user_undo_uidgid(void);
+int mk_user_init(struct client_session *cs, struct session_request *sr, struct server_config *config);
+int mk_user_set_uidgid(struct server_config *config);
+int mk_user_undo_uidgid(struct server_config *config);
 
 #endif

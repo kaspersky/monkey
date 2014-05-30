@@ -150,13 +150,11 @@ struct server_config
     struct mk_config *config;
 };
 
-extern struct server_config *config;
-
 
 /* Functions */
-void mk_config_start_configure(void);
+void mk_config_start_configure(struct server_config *config);
 void mk_config_add_index(char *indexname);
-void mk_config_set_init_values(void);
+void mk_config_set_init_values(struct server_config *config);
 
 /* config helpers */
 void mk_config_error(const char *path, int line, const char *msg);
@@ -169,12 +167,14 @@ struct mk_config_section *mk_config_section_add(struct mk_config *conf,
 void *mk_config_section_getval(struct mk_config_section *section, char *key, int mode);
 
 void mk_config_free(struct mk_config *cnf);
-void mk_config_free_all();
+void mk_config_free_all(struct server_config *config);
 void mk_config_free_entries(struct mk_config_section *section);
 
 
 int mk_config_get_bool(char *value);
 void mk_config_read_hosts(char *path);
-void mk_config_sanity_check(void);
+void mk_config_sanity_check(struct server_config *config);
+
+void mk_details(struct server_config *);
 
 #endif

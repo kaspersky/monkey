@@ -36,7 +36,7 @@
 #include "mk_config.h"
 #include "mk_macros.h"
 
-int mk_user_init(struct client_session *cs, struct session_request *sr)
+int mk_user_init(struct client_session *cs, struct session_request *sr, struct server_config *config)
 {
     int limit;
     const int offset = 2; /* The user is defined after the '/~' string, so offset = 2 */
@@ -66,7 +66,7 @@ int mk_user_init(struct client_session *cs, struct session_request *sr)
 
     /* Check system user */
     if ((s_user = getpwnam(user)) == NULL) {
-        mk_request_error(MK_CLIENT_NOT_FOUND, cs, sr);
+        mk_request_error(MK_CLIENT_NOT_FOUND, cs, sr, config);
         return -1;
     }
 
@@ -97,7 +97,7 @@ int mk_user_init(struct client_session *cs, struct session_request *sr)
 #ifndef SHAREDLIB
 
 /* Change process user */
-int mk_user_set_uidgid()
+int mk_user_set_uidgid(struct server_config *config)
 {
     struct passwd *usr;
 
@@ -145,7 +145,7 @@ int mk_user_set_uidgid()
 }
 
 /* Return process to the original user */
-int mk_user_undo_uidgid()
+int mk_user_undo_uidgid(struct server_config *config)
 {
     if (config->is_seteuid == MK_TRUE) {
         if (setegid(0) < 0) mk_err("Can't restore effective GID");

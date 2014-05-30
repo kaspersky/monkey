@@ -135,7 +135,7 @@ static void mk_header_iov_free(struct mk_iov *iov)
 
 /* Send response headers */
 int mk_header_send(int fd, struct client_session *cs,
-                   struct session_request *sr)
+                   struct session_request *sr, struct server_config *config)
 {
     int i=0;
     unsigned long len = 0;
@@ -193,7 +193,7 @@ int mk_header_send(int fd, struct client_session *cs,
 
     /* Connection */
     if (sh->connection == 0) {
-        if (mk_http_keepalive_check(cs) == 0) {
+        if (mk_http_keepalive_check(cs, config) == 0) {
             if (sr->connection.len > 0) {
                 /* Get cached mk_ptr_ts */
                 mk_ptr_t *ka_format = mk_cache_get(mk_cache_header_ka);
@@ -320,7 +320,7 @@ int mk_header_send(int fd, struct client_session *cs,
         }
     }
 
-    mk_server_cork_flag(fd, TCP_CORK_ON);
+    mk_server_cork_flag(fd, TCP_CORK_ON, config);
 
     if (sh->cgi == SH_NOCGI || sh->breakline == MK_HEADER_BREAKLINE) {
         if (!sr->headers._extra_rows) {
@@ -333,9 +333,9 @@ int mk_header_send(int fd, struct client_session *cs,
         }
     }
 
-    mk_socket_sendv(fd, iov);
+    mk_socket_sendv(fd, iov, config);
     if (sr->headers._extra_rows) {
-        mk_socket_sendv(fd, sr->headers._extra_rows);
+        mk_socket_sendv(fd, sr->headers._extra_rows, config);
         mk_iov_free(sr->headers._extra_rows);
         sr->headers._extra_rows = NULL;
     }

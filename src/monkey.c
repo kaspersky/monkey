@@ -132,6 +132,7 @@ int main(int argc, char **argv)
     char *sites_conf_dir = NULL;
     char *plugins_conf_dir = NULL;
     char *mimes_conf_file = NULL;
+    struct server_config *config = NULL;
 
     static const struct option long_opts[] = {
         { "configdir",              required_argument,  NULL, 'c' },
@@ -192,12 +193,12 @@ int main(int argc, char **argv)
     }
 
     /* setup basic configurations */
-    config = mk_mem_malloc_z(sizeof(struct server_config));
+    config = mk_mem_malloc_z(sizeof(*config));
 
 
     /* Init Kernel version data */
     mk_kernel_init();
-    mk_kernel_features();
+    mk_kernel_features(config);
 
     /* set configuration path */
     if (!path_config) {
@@ -272,15 +273,15 @@ int main(int argc, char **argv)
     }
 
     /* Core and Scheduler setup */
-    mk_config_start_configure();
-    mk_sched_init();
+    mk_config_start_configure(config);
+    mk_sched_init(config);
 
     /* Clock init that must happen before starting threads */
     mk_clock_sequential_init();
 
     /* Load plugins */
-    mk_plugin_init();
-    mk_plugin_read_config();
+    mk_plugin_init(config);
+    mk_plugin_read_config(config);
 
     /* Override TCP port if it was set in the command line */
     if (port_override > 0) {
@@ -299,11 +300,11 @@ int main(int argc, char **argv)
 
     /* Running Monkey as daemon */
     if (config->is_daemon == MK_TRUE) {
-        mk_utils_set_daemon();
+        mk_utils_set_daemon(config);
     }
 
     /* Register PID of Monkey */
-    mk_utils_register_pid();
+    mk_utils_register_pid(config);
 
     /* Workers: logger and clock */
     mk_utils_worker_spawn((void *) mk_clock_worker_init, NULL);
@@ -315,19 +316,21 @@ int main(int argc, char **argv)
     mk_thread_keys_init();
 
     /* Change process owner */
-    mk_user_set_uidgid();
+    mk_user_set_uidgid(config);
 
     /* Configuration sanity check */
-    mk_config_sanity_check();
+    mk_config_sanity_check(config);
 
     /* Invoke Plugin PRCTX hooks */
-    mk_plugin_core_process();
+    mk_plugin_core_process(config);
 
     /* Launch monkey http workers */
-    mk_server_launch_workers();
+    mk_server_launch_workers(config);
+
+    while(1);
 
     /* Print server details */
-    mk_details();
+    mk_details(config);
 
     /* Wait until all workers report as ready */
     while (1) {
@@ -345,7 +348,7 @@ int main(int argc, char **argv)
     }
 
     /* Server loop, let's listen for incomming clients */
-    mk_server_loop(config->server_fd);
+    mk_server_loop(config->server_fd, config);
 
     mk_mem_free(config);
     return 0;

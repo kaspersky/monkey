@@ -106,24 +106,26 @@ struct sched_list_node
 struct sched_list_node *sched_list;
 
 /* Struct under thread context */
-typedef struct
+struct sched_thread_conf
 {
     int server_fd;
     int epoll_fd;
     int epoll_max_events;
     int max_events;
 
+    struct server_config *config;
+
 #ifdef SHAREDLIB
     mklib_ctx ctx;
 #endif
-} sched_thread_conf;
+};
 
 pthread_key_t MK_EXPORT worker_sched_node;
 extern pthread_mutex_t mutex_worker_init;
 pthread_mutex_t mutex_port_init;
 
-void mk_sched_init();
-int mk_sched_launch_thread(int max_events, pthread_t *tout, mklib_ctx ctx);
+void mk_sched_init(struct server_config *config);
+int mk_sched_launch_thread(int max_events, pthread_t *tout, mklib_ctx ctx, struct server_config *config);
 void *mk_sched_launch_epoll_loop(void *thread_conf);
 struct sched_list_node *mk_sched_get_handler_owner(void);
 
@@ -144,11 +146,11 @@ void mk_sched_update_thread_status(struct sched_list_node *sched,
                                    int active, int closed);
 
 
-int mk_sched_check_timeouts(struct sched_list_node *sched);
-int mk_sched_add_client(int remote_fd);
+int mk_sched_check_timeouts(struct sched_list_node *sched, struct server_config *config);
+int mk_sched_add_client(int remote_fd, struct server_config *config);
 int mk_sched_add_client_reuseport(int remote_fd, struct sched_list_node *sched);
-int mk_sched_register_client(int remote_fd, struct sched_list_node *sched);
-int mk_sched_remove_client(struct sched_list_node *sched, int remote_fd);
+int mk_sched_register_client(int remote_fd, struct sched_list_node *sched, struct server_config *config);
+int mk_sched_remove_client(struct sched_list_node *sched, int remote_fd, struct server_config *config);
 struct sched_connection *mk_sched_get_connection(struct sched_list_node
                                                      *sched, int remote_fd);
 int mk_sched_update_conn_status(struct sched_list_node *sched, int remote_fd,

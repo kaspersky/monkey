@@ -48,18 +48,18 @@
 
 /* when we catch a signal and want to exit we call this function
    to do it gracefully */
-static void mk_signal_exit()
+static void mk_signal_exit(struct server_config *config)
 {
     /* ignore future signals to properly handle the cleanup */
     signal(SIGTERM, SIG_IGN);
     signal(SIGINT,  SIG_IGN);
     signal(SIGHUP,  SIG_IGN);
 
-    mk_utils_remove_pid();
-    mk_plugin_exit_all();
+    mk_utils_remove_pid(config);
+    mk_plugin_exit_all(config);
 
 #ifdef SAFE_FREE
-    mk_config_free_all();
+    mk_config_free_all(config);
 #endif
 
     mk_info("Exiting... >:(");
@@ -76,12 +76,15 @@ void mk_signal_thread_sigpipe_safe()
 }
 
 
-static void mk_signal_handler(int signo, siginfo_t *si, void *context UNUSED_PARAM)
+// TODO pass actual config param
+static void mk_signal_handler(int signo, siginfo_t *si, void *vp_config)
 {
+    struct server_config *config = vp_config;
+
     switch (signo) {
     case SIGTERM:
     case SIGINT:
-        mk_signal_exit();
+        mk_signal_exit(config);
         break;
     case SIGHUP:
         /*
@@ -91,7 +94,7 @@ static void mk_signal_handler(int signo, siginfo_t *si, void *context UNUSED_PAR
          * reload their configuration files. Sending SIGHUP to Apache, for example,
          * instructs it to reread httpd.conf.
          */
-        mk_signal_exit();
+        mk_signal_exit(config);
         break;
     case SIGBUS:
     case SIGSEGV:

@@ -610,7 +610,7 @@ static int mk_dirhtml_send(int fd, struct session_request *sr, struct mk_iov *da
         /* Add chunked information */
         mk_api->iov_set_entry(data, buf, len, MK_IOV_FREE_BUF, 0);
     }
-    n = (int) mk_api->socket_sendv(fd, data);
+    n = (int) mk_api->socket_sendv(fd, data, mk_api->config);
     return n;
 }
 
@@ -619,7 +619,7 @@ static int mk_dirhtml_send_chunked_end(int fd)
     char *_end = "0\r\n\r\n";
     int len = 5;
 
-    return mk_api->socket_send(fd, _end, len);
+    return mk_api->socket_send(fd, _end, len, mk_api->config);
 }
 
 static void mk_dirhtml_free_list(struct mk_f_list **toc, unsigned long len)
@@ -707,7 +707,7 @@ int mk_dirhtml_init(struct client_session *cs, struct session_request *sr)
     qsort(toc, list_len, sizeof(*toc), mk_dirhtml_entry_cmp);
 
     /* Sending headers */
-    n = mk_api->header_send(cs->socket, cs, sr);
+    n = mk_api->header_send(cs->socket, cs, sr, mk_api->config);
     if (n < 0) {
         goto exit;
     }

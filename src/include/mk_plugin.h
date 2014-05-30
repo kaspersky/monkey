@@ -181,10 +181,10 @@ struct plugin_api
     int (*socket_set_nonblocking) (int);
     int (*socket_create) ();
     int (*socket_close) (int);
-    int (*socket_sendv) (int, struct mk_iov *);
-    int (*socket_send) (int, const void *, size_t);
+    int (*socket_sendv) (int, struct mk_iov *, struct server_config *);
+    int (*socket_send) (int, const void *, size_t, struct server_config *);
     int (*socket_read) (int, void *, int);
-    int (*socket_send_file) (int, int, off_t *, size_t);
+    int (*socket_send_file) (int, int, off_t *, size_t, struct server_config *);
     int (*socket_ip_str) (int, char **, int, unsigned long *);
 
     struct server_config *config;
@@ -195,8 +195,8 @@ struct plugin_api
     void (*_error) (int, const char *, ...) PRINTF_WARNINGS(2,3);
 
     /* HTTP request function */
-    int   (*http_request_end) (int);
-    int   (*http_request_error) (int, struct client_session *, struct session_request *);
+    int   (*http_request_end) (int, struct server_config *);
+    int   (*http_request_error) (int, struct client_session *, struct session_request *, struct server_config *);
 
     /* memory functions */
     void *(*mem_alloc) (const size_t size);
@@ -222,7 +222,7 @@ struct plugin_api
     int  (*file_get_info) (const char *, struct file_info *);
 
     /* header */
-    int  (*header_send) (int, struct client_session *, struct session_request *);
+    int  (*header_send) (int, struct client_session *, struct session_request *, struct server_config *);
     mk_ptr_t (*header_get) (struct headers_toc *, const char *key_name, int key_len);
     int  (*header_add) (struct session_request *, char *row, int len);
     void (*header_set_http_status) (struct session_request *, int);
@@ -241,7 +241,7 @@ struct plugin_api
     void *(*plugin_load_symbol) (void *, const char *);
 
     /* epoll functions */
-    void *(*epoll_init) (int, int, int);
+    void *(*epoll_init) (int, int, int, struct server_config *);
     int   (*epoll_create) (int);
     int   (*epoll_add) (int, int, int, unsigned int);
     int   (*epoll_del) (int, int);
@@ -265,7 +265,7 @@ struct plugin_api
 
 
     /* Scheduler */
-    int (*sched_remove_client) (int);
+    int (*sched_remove_client) (int, struct server_config *);
     struct sched_connection *(*sched_get_connection) (struct sched_list_node *,
                                                       int);
     struct sched_list_node *(*sched_worker_info)();
@@ -294,7 +294,7 @@ struct plugin_api
 
     /* kernel interfaces */
     int (*kernel_version) ();
-    int (*kernel_features_print) (char *, size_t);
+    int (*kernel_features_print) (char *, size_t, struct server_config *);
 };
 
 extern struct plugin_api *api;
@@ -318,21 +318,21 @@ struct plugin_info {
     unsigned int hooks;
 };
 
-void mk_plugin_init();
-void mk_plugin_read_config();
-void mk_plugin_exit_all();
+void mk_plugin_init(struct server_config *config);
+void mk_plugin_read_config(struct server_config *config);
+void mk_plugin_exit_all(struct server_config *config);
 
 void mk_plugin_event_init_list();
 
 int mk_plugin_stage_run(unsigned int stage,
                         unsigned int socket,
                         struct sched_connection *conx,
-                        struct client_session *cs, struct session_request *sr);
+                        struct client_session *cs, struct session_request *sr, struct server_config *config);
 
-void mk_plugin_core_process();
-void mk_plugin_core_thread();
+void mk_plugin_core_process(struct server_config *config);
+void mk_plugin_core_thread(struct server_config *config);
 
-void mk_plugin_preworker_calls();
+void mk_plugin_preworker_calls(struct server_config *config);
 
 /* Plugins events interface */
 int mk_plugin_event_add(int socket, int mode,
@@ -344,19 +344,19 @@ struct plugin_event *mk_plugin_event_get(int socket);
 int mk_plugin_event_socket_change_mode(int socket, int mode, unsigned int behavior);
 
 /* Plugins event handlers */
-int mk_plugin_event_read(int socket);
-int mk_plugin_event_write(int socket);
-int mk_plugin_event_error(int socket);
-int mk_plugin_event_close(int socket);
-int mk_plugin_event_timeout(int socket);
+int mk_plugin_event_read(int socket, struct server_config *config);
+int mk_plugin_event_write(int socket, struct server_config *config);
+int mk_plugin_event_error(int socket, struct server_config *config);
+int mk_plugin_event_close(int socket, struct server_config *config);
+int mk_plugin_event_timeout(int socket, struct server_config *config);
 
 void *mk_plugin_load(const char *path);
 void mk_plugin_register_to(struct plugin **st, struct plugin *p);
 void *mk_plugin_load_symbol(void *handler, const char *symbol);
-int mk_plugin_http_request_end(int socket);
+int mk_plugin_http_request_end(int socket, struct server_config *config);
 
 /* Register functions */
-struct plugin *mk_plugin_register(struct plugin *p);
+struct plugin *mk_plugin_register(struct plugin *p, struct server_config *config);
 void mk_plugin_unregister(struct plugin *p);
 
 struct plugin *mk_plugin_alloc(void *handler, const char *path);
@@ -365,7 +365,7 @@ void mk_plugin_free(struct plugin *p);
 int mk_plugin_time_now_unix();
 mk_ptr_t *mk_plugin_time_now_human();
 
-int mk_plugin_sched_remove_client(int socket);
+int mk_plugin_sched_remove_client(int socket, struct server_config *config);
 
 int mk_plugin_header_add(struct session_request *sr, char *row, int len);
 int mk_plugin_header_get(struct session_request *sr,

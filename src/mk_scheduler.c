@@ -45,7 +45,7 @@
 
 pthread_key_t worker_sched_node;
 
-struct sched_list_node *sched_list;
+struct sched_list_node *sched_list; //TODO comment this
 
 static pthread_mutex_t mutex_sched_init = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_worker_init = PTHREAD_MUTEX_INITIALIZER;
@@ -57,7 +57,7 @@ __thread struct rb_root *cs_list;
  * it returns the worker id with less active connections. Just used
  * if config->scheduler_mode is MK_SCHEDULER_FAIR_BALANCING.
  */
-static inline int _next_target()
+static inline int _next_target(struct server_config *config)
 {
     int i;
     int ret;
@@ -184,13 +184,13 @@ int mk_sched_sync_counters()
  * Assign a new incomming connection to a specific worker thread, this call comes
  * from the main monkey process.
  */
-int mk_sched_add_client(int remote_fd)
+int mk_sched_add_client(int remote_fd, struct server_config *config)
 {
     int r, t=0;
     struct sched_list_node *sched;
 
     /* Next worker target */
-    t = _next_target();
+    t = _next_target(config);
 
     if (mk_unlikely(t == -1)) {
         MK_TRACE("[FD %i] Over Capacity, drop!", remote_fd);
@@ -232,7 +232,7 @@ int mk_sched_add_client_reuseport(int remote_fd, struct sched_list_node *sched)
  * Register a new client connection into the scheduler, this call takes place
  * inside the worker/thread context.
  */
-int mk_sched_register_client(int remote_fd, struct sched_list_node *sched)
+int mk_sched_register_client(int remote_fd, struct sched_list_node *sched, struct server_config *config)
 {
     int ret;
     struct sched_connection *sched_conn;
@@ -243,11 +243,11 @@ int mk_sched_register_client(int remote_fd, struct sched_list_node *sched)
     /* Before to continue, we need to run plugin stage 10 */
     ret = mk_plugin_stage_run(MK_PLUGIN_STAGE_10,
                               remote_fd,
-                              sched_conn, NULL, NULL);
+                              sched_conn, NULL, NULL, config);
 
     /* Close connection, otherwise continue */
     if (ret == MK_PLUGIN_RET_CLOSE_CONX) {
-        mk_conn_close(remote_fd, MK_EP_SOCKET_CLOSED);
+        mk_conn_close(remote_fd, MK_EP_SOCKET_CLOSED, config);
         MK_LT_SCHED(remote_fd, "PLUGIN_CLOSE");
         return -1;
     }
@@ -295,7 +295,7 @@ static void mk_sched_thread_lists_init()
 }
 
 /* Register thread information. The caller thread is the thread information's owner */
-static int mk_sched_register_thread(int server_fd, int efd)
+static int mk_sched_register_thread(int server_fd, int efd, struct server_config *config)
 {
     unsigned int i;
     struct sched_connection *sched_conn, *array;
@@ -354,7 +354,7 @@ void *mk_sched_launch_worker_loop(void *thread_conf)
     int server_fd = -1;
     char *thread_name = 0;
     unsigned long len;
-    sched_thread_conf *thconf = thread_conf;
+    struct sched_thread_conf *thconf = thread_conf;
     int wid, epoll_max_events = thconf->epoll_max_events;
     struct sched_list_node *thinfo = NULL;
     struct epoll_event event = {0, {0}};
@@ -366,13 +366,13 @@ void *mk_sched_launch_worker_loop(void *thread_conf)
 
     /* Init specific thread cache */
     mk_sched_thread_lists_init();
-    mk_cache_thread_init();
+    mk_cache_thread_init(thconf->config);
 
     /* Register working thread */
-    if (config->scheduler_mode == MK_SCHEDULER_REUSEPORT) {
+    if (thconf->config->scheduler_mode == MK_SCHEDULER_REUSEPORT) {
         pthread_mutex_lock(&mutex_port_init);
-        server_fd = mk_socket_server(config->serverport,
-                                     config->listen_addr,
+        server_fd = mk_socket_server(thconf->config->serverport,
+                                     thconf->config->listen_addr,
                                      MK_TRUE);
 
         /* Activate TCP_DEFER_ACCEPT */
@@ -381,11 +381,11 @@ void *mk_sched_launch_worker_loop(void *thread_conf)
         }
         pthread_mutex_unlock(&mutex_port_init);
     }
-    wid = mk_sched_register_thread(server_fd, thconf->epoll_fd);
+    wid = mk_sched_register_thread(server_fd, thconf->epoll_fd, thconf->config);
 
 
     /* Plugin thread context calls */
-    mk_epoll_state_init();
+    mk_epoll_state_init(thconf->config);
     mk_plugin_event_init_list();
 
     thinfo = &sched_list[wid];
@@ -423,8 +423,6 @@ void *mk_sched_launch_worker_loop(void *thread_conf)
     thinfo->ctx = thconf->ctx;
 #endif
 
-    mk_mem_free(thread_conf);
-
     /* Rename worker */
     mk_string_build(&thread_name, &len, "monkey: wrk/%i", thinfo->idx);
     mk_utils_worker_rename(thread_name);
@@ -432,13 +430,15 @@ void *mk_sched_launch_worker_loop(void *thread_conf)
 
     /* Export known scheduler node to context thread */
     pthread_setspecific(worker_sched_node, (void *) thinfo);
-    mk_plugin_core_thread();
+    mk_plugin_core_thread(thconf->config);
 
     __builtin_prefetch(thinfo);
     __builtin_prefetch(&worker_sched_node);
 
     /* Init epoll_wait() loop */
-    mk_epoll_init(thinfo->server_fd, thinfo->epoll_fd, epoll_max_events);
+    mk_epoll_init(thinfo->server_fd, thinfo->epoll_fd, epoll_max_events, thconf->config);
+
+    mk_mem_free(thread_conf);
 
     return 0;
 }
@@ -447,12 +447,12 @@ void *mk_sched_launch_worker_loop(void *thread_conf)
  * Create thread which will be listening
  * for incomings file descriptors
  */
-int mk_sched_launch_thread(int max_events, pthread_t *tout, mklib_ctx ctx UNUSED_PARAM)
+int mk_sched_launch_thread(int max_events, pthread_t *tout, mklib_ctx ctx UNUSED_PARAM, struct server_config *config UNUSED_PARAM)
 {
     int efd;
     pthread_t tid;
     pthread_attr_t attr;
-    sched_thread_conf *thconf;
+    struct sched_thread_conf *thconf;
 
     /* Creating epoll file descriptor */
     efd = mk_epoll_create();
@@ -461,12 +461,15 @@ int mk_sched_launch_thread(int max_events, pthread_t *tout, mklib_ctx ctx UNUSED
     }
 
     /* Thread data */
-    thconf = mk_mem_malloc_z(sizeof(sched_thread_conf));
+    thconf = mk_mem_malloc_z(sizeof(struct sched_thread_conf));
     thconf->epoll_fd = efd;
     thconf->epoll_max_events = (max_events * 2);
     thconf->max_events = max_events;
 #ifdef SHAREDLIB
     thconf->ctx = ctx;
+    thconf->config = ctx->config;
+#else
+    thconf->config = config;
 #endif
 
     pthread_attr_init(&attr);
@@ -487,7 +490,7 @@ int mk_sched_launch_thread(int max_events, pthread_t *tout, mklib_ctx ctx UNUSED
  * each worker thread belongs to a scheduler node, on this function we
  * allocate a scheduler node per number of workers defined.
  */
-void mk_sched_init()
+void mk_sched_init(struct server_config *config)
 {
     sched_list = mk_mem_malloc_z(sizeof(struct sched_list_node) *
                                  config->workers);
@@ -498,7 +501,7 @@ void mk_sched_set_request_list(struct rb_root *list)
     cs_list = list;
 }
 
-int mk_sched_remove_client(struct sched_list_node *sched, int remote_fd)
+int mk_sched_remove_client(struct sched_list_node *sched, int remote_fd, struct server_config *config)
 {
     struct sched_connection *sc;
 
@@ -515,7 +518,7 @@ int mk_sched_remove_client(struct sched_list_node *sched, int remote_fd)
         MK_TRACE("[FD %i] Scheduler remove", remote_fd);
 
         /* Invoke plugins in stage 50 */
-        mk_plugin_stage_run(MK_PLUGIN_STAGE_50, remote_fd, NULL, NULL, NULL);
+        mk_plugin_stage_run(MK_PLUGIN_STAGE_50, remote_fd, NULL, NULL, NULL, config);
         sched->closed_connections++;
 
         /* Change node status */
@@ -583,7 +586,7 @@ struct sched_connection *mk_sched_get_connection(struct sched_list_node *sched,
     return NULL;
 }
 
-int mk_sched_check_timeouts(struct sched_list_node *sched)
+int mk_sched_check_timeouts(struct sched_list_node *sched, struct server_config *config)
 {
     int client_timeout;
     struct client_session *cs_node;
@@ -600,7 +603,7 @@ int mk_sched_check_timeouts(struct sched_list_node *sched)
             if (client_timeout <= log_current_utime) {
                 MK_TRACE("Scheduler, closing fd %i due TIMEOUT", entry_conn->socket);
                 MK_LT_SCHED(entry_conn->socket, "TIMEOUT_CONN_PENDING");
-                mk_sched_remove_client(sched, entry_conn->socket);
+                mk_sched_remove_client(sched, entry_conn->socket, config);
             }
         }
     }
@@ -623,7 +626,7 @@ int mk_sched_check_timeouts(struct sched_list_node *sched)
                 MK_TRACE("[FD %i] Scheduler, closing due to timeout (incomplete)",
                          cs_node->socket);
                 MK_LT_SCHED(cs_node->socket, "TIMEOUT_REQ_INCOMPLETE");
-                mk_sched_remove_client(sched, cs_node->socket);
+                mk_sched_remove_client(sched, cs_node->socket, config);
                 mk_session_remove(cs_node->socket);
 
                 /* This removal invalidated our iterator. Start over from the beginning. */

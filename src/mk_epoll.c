@@ -48,7 +48,7 @@ static __thread struct epoll_state_index mk_epoll_state_k;
  * a fixed array of epoll_state entries and two mk_list to represent an available and
  * busy queue for each entry
  */
-int mk_epoll_state_init()
+int mk_epoll_state_init(struct server_config *config)
 {
     int i;
     struct epoll_state *es;
@@ -212,7 +212,7 @@ int mk_epoll_create()
     return efd;
 }
 
-void *mk_epoll_init(int server_fd, int efd, int max_events)
+void *mk_epoll_init(int server_fd, int efd, int max_events, struct server_config *config)
 {
     int i, fd, ret = -1;
     int num_fds;
@@ -267,16 +267,16 @@ void *mk_epoll_init(int server_fd, int efd, int max_events)
 #endif
                     /* Register new connection into the scheduler */
                     mk_sched_add_client_reuseport(remote_fd, sched);
-                    mk_sched_register_client(remote_fd, sched);
+                    mk_sched_register_client(remote_fd, sched, config);
                     fd = remote_fd;
                 }
-                ret = mk_conn_read(fd);
+                ret = mk_conn_read(fd, config);
             }
             else if (events[i].events & EPOLLOUT) {
                 MK_LT_EPOLL(fd, "EPOLLOUT");
                 MK_TRACE("[FD %i] EPoll Event WRITE", fd);
 
-                ret = mk_conn_write(fd);
+                ret = mk_conn_write(fd, config);
             }
             else if (events[i].events & (EPOLLHUP | EPOLLERR | EPOLLRDHUP)) {
 #ifdef LINUX_TRACE
@@ -285,21 +285,21 @@ void *mk_epoll_init(int server_fd, int efd, int max_events)
                 if (events[i].events & (EPOLLRDHUP)) MK_LT_EPOLL(fd, "EPOLLRDHUP");
 #endif
                 MK_TRACE("[FD %i] EPoll Event EPOLLHUP/EPOLLERR/EPOLLRDHUP", fd);
-                mk_conn_close(fd, MK_EP_SOCKET_CLOSED);
+                mk_conn_close(fd, MK_EP_SOCKET_CLOSED, config);
                 ret = 0;
             }
 
             if (ret < 0) {
                 MK_LT_EPOLL(fd, "FORCED CLOSE");
                 MK_TRACE("[FD %i] Epoll Event FORCE CLOSE | ret = %i", fd, ret);
-                mk_conn_close(fd, MK_EP_SOCKET_CLOSED);
+                mk_conn_close(fd, MK_EP_SOCKET_CLOSED, config);
             }
         }
 
         /* Check timeouts and update next one */
         if (log_current_utime >= fds_timeout) {
             MK_LT_EPOLL(0, "TIMEOUT CHECK");
-            mk_sched_check_timeouts(sched);
+            mk_sched_check_timeouts(sched, config);
             fds_timeout = log_current_utime + config->timeout;
         }
     }

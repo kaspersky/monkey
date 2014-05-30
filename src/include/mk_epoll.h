@@ -19,6 +19,7 @@
 
 #include <sys/epoll.h>
 #include "mk_rbtree.h"
+#include "mk_config.h"
 
 #ifndef MK_EPOLL_H
 #define MK_EPOLL_H
@@ -52,6 +53,7 @@
 
 #define MK_EPOLL_STATE_INDEX_CHUNK 64
 
+// TODO UNUSED
 typedef struct
 {
     int (*read) (int);
@@ -85,7 +87,7 @@ struct epoll_state_index
 
 /* Monkey epoll calls */
 int mk_epoll_create();
-void *mk_epoll_init(int server_fd, int efd, int max_events);
+void *mk_epoll_init(int server_fd, int efd, int max_events, struct server_config *config);
 struct epoll_state *mk_epoll_state_get(int fd);
 
 int mk_epoll_add(int efd, int fd, int mode, unsigned int behavior);
@@ -96,6 +98,6 @@ int mk_epoll_change_mode(int efd, int fd, int mode, unsigned int behavior);
 struct epoll_state *mk_epoll_state_set(int fd, uint8_t mode,
                                        unsigned int behavior,
                                        uint32_t events);
-int mk_epoll_state_init();
+int mk_epoll_state_init(struct server_config *config);
 
 #endif

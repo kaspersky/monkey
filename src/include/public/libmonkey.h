@@ -83,7 +83,7 @@ enum {
 
 /* Config options for the main config call */
 enum mklib_mkc {
-    MKC_WORKERS = 1,
+    MKC_WORKERS = 1, //TODO
     MKC_TIMEOUT,
     MKC_USERDIR,
     MKC_INDEXFILE,

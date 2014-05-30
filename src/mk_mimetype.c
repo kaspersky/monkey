@@ -110,7 +110,7 @@ int mk_mimetype_add(char *name, const char *type)
 }
 
 /* Load the two mime arrays into memory */
-void mk_mimetype_read_config()
+void mk_mimetype_read_config(struct server_config *config)
 {
     char path[MK_MAX_PATH];
     struct mk_config *cnf;

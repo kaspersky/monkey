@@ -96,7 +96,7 @@ long int mk_method_validate_content_length(const char *body, int body_len)
 }
 
 /* It parse data sent by POST or PUT methods */
-int mk_method_parse_data(struct client_session *cs, struct session_request *sr)
+int mk_method_parse_data(struct client_session *cs, struct session_request *sr, struct server_config *config)
 {
     mk_ptr_t tmp;
     long content_length_post = 0;
@@ -105,19 +105,19 @@ int mk_method_parse_data(struct client_session *cs, struct session_request *sr)
 
     /* Length Required */
     if (content_length_post == -1) {
-        mk_request_error(MK_CLIENT_LENGTH_REQUIRED, cs, sr);
+        mk_request_error(MK_CLIENT_LENGTH_REQUIRED, cs, sr, config);
         return -1;
     }
 
     /* Bad request */
     if (content_length_post <= 0) {
-        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr);
+        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr, config);
         return -1;
     }
 
     /* Content length too large */
     if (content_length_post >= cs->body_size) {
-        mk_request_error(MK_CLIENT_REQUEST_ENTITY_TOO_LARGE, cs, sr);
+        mk_request_error(MK_CLIENT_REQUEST_ENTITY_TOO_LARGE, cs, sr, config);
         return -1;
     }
 

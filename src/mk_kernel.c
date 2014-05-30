@@ -25,6 +25,7 @@
 #include "mk_string.h"
 #include "mk_utils.h"
 #include "mk_server.h"
+#include "mk_config.h"
 
 int mk_kernel_init()
 {
@@ -81,7 +82,7 @@ int mk_kernel_version()
 }
 
 /* Detect specific Linux Kernel features that we may use */
-int mk_kernel_features()
+int mk_kernel_features(struct server_config *config)
 {
     int flags = 0;
 
@@ -105,7 +106,7 @@ int mk_kernel_features()
     return flags;
 }
 
-int mk_kernel_features_print(char *buffer, size_t size)
+int mk_kernel_features_print(char *buffer, size_t size, struct server_config *config)
 {
     int offset = 0;
     int features = 0;
