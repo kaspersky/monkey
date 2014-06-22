@@ -35,8 +35,9 @@
 #include "mk_utils.h"
 #include "mk_config.h"
 #include "mk_macros.h"
+#include "mk_scheduler.h"
 
-int mk_user_init(struct client_session *cs, struct session_request *sr)
+int mk_user_init(struct client_session *cs, struct session_request *sr, struct sched_list_node *__sched)
 {
     int limit;
     const int offset = 2; /* The user is defined after the '/~' string, so offset = 2 */
@@ -66,7 +67,7 @@ int mk_user_init(struct client_session *cs, struct session_request *sr)
 
     /* Check system user */
     if ((s_user = getpwnam(user)) == NULL) {
-        mk_request_error(MK_CLIENT_NOT_FOUND, cs, sr);
+        mk_request_error(MK_CLIENT_NOT_FOUND, cs, sr, __sched);
         return -1;
     }
 

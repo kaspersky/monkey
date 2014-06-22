@@ -212,23 +212,19 @@ int mk_epoll_create()
     return efd;
 }
 
-void *mk_epoll_init(int server_fd, int efd, int max_events)
+void *mk_epoll_init(int server_fd, int efd, int max_events, struct sched_list_node *__sched)
 {
     int i, fd, ret = -1;
     int num_fds;
     int fds_timeout;
     int remote_fd;
     struct epoll_event *events;
-    struct sched_list_node *sched;
-
-    /* Get thread conf */
-    sched = mk_sched_get_thread_conf();
 
     fds_timeout = log_current_utime + config->timeout;
     events = mk_mem_malloc_z(max_events * sizeof(struct epoll_event));
 
     pthread_mutex_lock(&mutex_worker_init);
-    sched->initialized = 1;
+    __sched->initialized = 1;
     pthread_mutex_unlock(&mutex_worker_init);
 
     while (1) {
@@ -242,7 +238,7 @@ void *mk_epoll_init(int server_fd, int efd, int max_events)
                 MK_LT_EPOLL(fd, "EPOLLIN");
                 MK_TRACE("[FD %i] EPoll Event READ", fd);
 
-                if (mk_unlikely(fd == sched->signal_channel)) {
+                if (mk_unlikely(fd == __sched->signal_channel)) {
                     uint64_t val = 0;
                     ret = read(fd, &val, sizeof(val));
                     if (ret > 0) {
@@ -257,7 +253,7 @@ void *mk_epoll_init(int server_fd, int efd, int max_events)
                 if (fd == server_fd) {
 
                     /* Make sure the worker have enough slots */
-                    if (mk_sched_check_capacity(sched) == -1) {
+                    if (mk_sched_check_capacity(__sched) == -1) {
                         continue;
                     }
 
@@ -272,22 +268,22 @@ void *mk_epoll_init(int server_fd, int efd, int max_events)
                     MK_TRACE("New connection arrived: FD %i", remote_fd);
 #endif
                     /* Register new connection into the scheduler */
-                    ret = mk_sched_add_client_reuseport(remote_fd, sched);
+                    ret = mk_sched_add_client_reuseport(remote_fd, __sched);
                     if (ret == -1) {
                         mk_warn("Server over capacity");
                         close(remote_fd);
                         continue;
                     }
-                    mk_sched_register_client(remote_fd, sched);
+                    mk_sched_register_client(remote_fd, __sched);
                     fd = remote_fd;
                 }
-                ret = mk_conn_read(fd);
+                ret = mk_conn_read(fd, __sched);
             }
             else if (events[i].events & EPOLLOUT) {
                 MK_LT_EPOLL(fd, "EPOLLOUT");
                 MK_TRACE("[FD %i] EPoll Event WRITE", fd);
 
-                ret = mk_conn_write(fd);
+                ret = mk_conn_write(fd, __sched);
             }
             else if (events[i].events & (EPOLLHUP | EPOLLERR | EPOLLRDHUP)) {
 #ifdef LINUX_TRACE
@@ -310,7 +306,7 @@ void *mk_epoll_init(int server_fd, int efd, int max_events)
         /* Check timeouts and update next one */
         if (log_current_utime >= fds_timeout) {
             MK_LT_EPOLL(0, "TIMEOUT CHECK");
-            mk_sched_check_timeouts(sched);
+            mk_sched_check_timeouts(__sched);
             fds_timeout = log_current_utime + config->timeout;
         }
     }

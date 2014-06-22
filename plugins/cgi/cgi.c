@@ -442,7 +442,7 @@ void _mkp_exit()
 }
 
 int _mkp_stage_30(struct plugin *plugin, struct client_session *cs,
-                  struct session_request *sr)
+                  struct session_request *sr, struct sched_list_node *__sched)
 {
     unsigned int i;
     char url[PATHLEN];

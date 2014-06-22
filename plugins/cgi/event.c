@@ -56,14 +56,14 @@ static char *getearliestbreak(const char buf[], const unsigned bufsize,
     return crend;
 }
 
-static void done(struct cgi_request * const r) {
+static void done(struct cgi_request * const r, struct sched_list_node *__sched) {
 
     if (!r)
         return;
 
     /* If the CGI app is fast, we might get a hangup event before
      * a write event. Try to write things out first. */
-    _mkp_event_write(r->socket);
+    _mkp_event_write(r->socket, __sched);
 
     mk_api->event_del(r->fd);
 
@@ -76,14 +76,14 @@ static void done(struct cgi_request * const r) {
     requests_by_socket[r->socket] = NULL;
 
     /* Note: Must make sure we ignore the close event caused by this line */
-    mk_api->http_request_end(r->socket);
+    mk_api->http_request_end(r->socket, __sched);
     mk_api->socket_close(r->fd);
 
 
     cgi_req_del(r);
 }
 
-static int hangup(const int socket)
+static int hangup(const int socket, struct sched_list_node *__sched)
 {
     struct cgi_request *r = cgi_req_get_by_fd(socket);
 
@@ -100,13 +100,13 @@ static int hangup(const int socket)
         while (1) {
             int ret = _mkp_event_read(socket);
             if (ret == MK_PLUGIN_RET_EVENT_CLOSE) {
-                done(r);
+                done(r, __sched);
                 break;
             }
 
-            ret = _mkp_event_write(r->socket);
+            ret = _mkp_event_write(r->socket, __sched);
             if (ret == MK_PLUGIN_RET_EVENT_CLOSE) {
-                done(r);
+                done(r, __sched);
                 break;
             }
         }
@@ -133,7 +133,7 @@ static int hangup(const int socket)
     return MK_PLUGIN_RET_EVENT_CONTINUE;
 }
 
-int _mkp_event_write(int socket)
+int _mkp_event_write(int socket, struct sched_list_node *__sched)
 {
     struct cgi_request *r = cgi_req_get(socket);
     if (!r) return MK_PLUGIN_RET_EVENT_NEXT;
@@ -175,7 +175,7 @@ int _mkp_event_write(int socket)
                 }
             }
 
-            mk_api->header_send(socket, r->cs, r->sr);
+            mk_api->header_send(socket, r->cs, r->sr, __sched);
 
             r->status_done = 1;
         }
@@ -269,12 +269,12 @@ out:
     return MK_PLUGIN_RET_EVENT_OWNED;
 }
 
-int _mkp_event_close(int socket)
+int _mkp_event_close(int socket, struct sched_list_node *__sched)
 {
-    return hangup(socket);
+    return hangup(socket, __sched);
 }
 
-int _mkp_event_error(int socket)
+int _mkp_event_error(int socket, struct sched_list_node *__sched)
 {
-    return hangup(socket);
+    return hangup(socket, __sched);
 }

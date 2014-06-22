@@ -639,7 +639,7 @@ static void mk_dirhtml_free_list(struct mk_f_list **toc, unsigned long len)
     mk_api->mem_free(toc);
 }
 
-int mk_dirhtml_init(struct client_session *cs, struct session_request *sr)
+int mk_dirhtml_init(struct client_session *cs, struct session_request *sr, struct sched_list_node *__sched)
 {
     DIR *dir;
     unsigned int i = 0;
@@ -707,7 +707,7 @@ int mk_dirhtml_init(struct client_session *cs, struct session_request *sr)
     qsort(toc, list_len, sizeof(*toc), mk_dirhtml_entry_cmp);
 
     /* Sending headers */
-    n = mk_api->header_send(cs->socket, cs, sr);
+    n = mk_api->header_send(cs->socket, cs, sr, __sched);
     if (n < 0) {
         goto exit;
     }
@@ -800,7 +800,7 @@ void _mkp_exit()
 }
 
 int _mkp_stage_30(struct plugin *plugin, struct client_session *cs,
-                  struct session_request *sr)
+                  struct session_request *sr, struct sched_list_node *__sched)
 {
     (void) plugin;
 
@@ -821,7 +821,7 @@ int _mkp_stage_30(struct plugin *plugin, struct client_session *cs,
     fcntl(cs->socket, F_SETFL, fcntl(cs->socket, F_GETFL, 0) & ~O_NONBLOCK);
 
     PLUGIN_TRACE("Dirlisting attending socket %i", cs->socket);
-    if (mk_dirhtml_init(cs, sr)) {
+    if (mk_dirhtml_init(cs, sr, __sched)) {
         /* If we failed here, we cannot return RET_END - that causes a mk_bug.
            dirhtml_init only fails if opendir fails. Usually we're at full
            capacity then and can't open new files. */

@@ -20,8 +20,10 @@
 #ifndef MK_CONNECTION_H
 #define MK_CONNECTION_H
 
-int mk_conn_read(int socket);
-int mk_conn_write(int socket);
+struct sched_list_node;
+
+int mk_conn_read(int socket, struct sched_list_node *__sched);
+int mk_conn_write(int socket, struct sched_list_node *__sched);
 int mk_conn_close(int socket, int event);
 
 #endif

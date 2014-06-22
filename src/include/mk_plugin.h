@@ -195,8 +195,8 @@ struct plugin_api
     void (*_error) (int, const char *, ...) PRINTF_WARNINGS(2,3);
 
     /* HTTP request function */
-    int   (*http_request_end) (int);
-    int   (*http_request_error) (int, struct client_session *, struct session_request *);
+    int   (*http_request_end) (int, struct sched_list_node *);
+    int   (*http_request_error) (int, struct client_session *, struct session_request *, struct sched_list_node *);
 
     /* memory functions */
     void *(*mem_alloc) (const size_t size);
@@ -222,7 +222,7 @@ struct plugin_api
     int  (*file_get_info) (const char *, struct file_info *);
 
     /* header */
-    int  (*header_send) (int, struct client_session *, struct session_request *);
+    int  (*header_send) (int, struct client_session *, struct session_request *, struct sched_list_node *);
     mk_ptr_t (*header_get) (struct headers_toc *, const char *key_name, int key_len);
     int  (*header_add) (struct session_request *, char *row, int len);
     void (*header_set_http_status) (struct session_request *, int);
@@ -241,7 +241,7 @@ struct plugin_api
     void *(*plugin_load_symbol) (void *, const char *);
 
     /* epoll functions */
-    void *(*epoll_init) (int, int, int);
+    void *(*epoll_init) (int, int, int, struct sched_list_node *);
     int   (*epoll_create) (int);
     int   (*epoll_add) (int, int, int, unsigned int);
     int   (*epoll_del) (int, int);
@@ -327,7 +327,7 @@ void mk_plugin_event_init_list();
 int mk_plugin_stage_run(unsigned int stage,
                         unsigned int socket,
                         struct sched_connection *conx,
-                        struct client_session *cs, struct session_request *sr);
+                        struct client_session *cs, struct session_request *sr, struct sched_list_node *__sched);
 
 void mk_plugin_core_process();
 void mk_plugin_core_thread();
@@ -344,8 +344,8 @@ struct plugin_event *mk_plugin_event_get(int socket);
 int mk_plugin_event_socket_change_mode(int socket, int mode, unsigned int behavior);
 
 /* Plugins event handlers */
-int mk_plugin_event_read(int socket);
-int mk_plugin_event_write(int socket);
+int mk_plugin_event_read(int socket, struct sched_list_node *__sched);
+int mk_plugin_event_write(int socket, struct sched_list_node *__sched);
 int mk_plugin_event_error(int socket);
 int mk_plugin_event_close(int socket);
 int mk_plugin_event_timeout(int socket);
@@ -353,7 +353,7 @@ int mk_plugin_event_timeout(int socket);
 void *mk_plugin_load(const char *path);
 void mk_plugin_register_to(struct plugin **st, struct plugin *p);
 void *mk_plugin_load_symbol(void *handler, const char *symbol);
-int mk_plugin_http_request_end(int socket);
+int mk_plugin_http_request_end(int socket, struct sched_list_node *__sched);
 
 /* Register functions */
 struct plugin *mk_plugin_register(struct plugin *p);

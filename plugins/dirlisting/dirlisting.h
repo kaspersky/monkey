@@ -130,7 +130,7 @@ struct dirhtml_template
     *mk_dirhtml_template_list_add(struct dirhtml_template **header,
                                   char *buf, int len, char **tpl, int tag);
 
-int mk_dirhtml_init(struct client_session *cs, struct session_request *sr);
+int mk_dirhtml_init(struct client_session *cs, struct session_request *sr, struct sched_list_node *__sched);
 int mk_dirhtml_read_config(char *path);
 int mk_dirhtml_theme_load();
 int mk_dirhtml_theme_debug(struct dirhtml_template **st_tpl);

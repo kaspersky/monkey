@@ -373,7 +373,7 @@ static int mk_request_header_process(struct session_request *sr)
     return 0;
 }
 
-static int mk_request_parse(struct client_session *cs)
+static int mk_request_parse(struct client_session *cs, struct sched_list_node *__sched)
 {
     int i, end;
     int blocks = 0;
@@ -420,7 +420,7 @@ static int mk_request_parse(struct client_session *cs)
             sr_node->method = cs->first_method;
         }
         else {
-            sr_node->method = mk_http_method_get(sr_node->body.data);
+            sr_node->method = mk_http_method_get(sr_node->body.data, __sched);
         }
 
         /* Looking for POST data */
@@ -475,7 +475,7 @@ static int mk_request_parse(struct client_session *cs)
  * when some connection was not proceesed due to a premature close or similar
  * exception, it also take care of invoke the STAGE_40 and STAGE_50 plugins events
  */
-static void mk_request_premature_close(int http_status, struct client_session *cs)
+static void mk_request_premature_close(int http_status, struct client_session *cs, struct sched_list_node *__sched)
 {
     struct session_request *sr;
     struct mk_list *sr_list = &cs->request_list;
@@ -500,19 +500,19 @@ static void mk_request_premature_close(int http_status, struct client_session *c
         if (!sr->host_conf) {
             sr->host_conf = mk_list_entry_first(host_list, struct host, _head);
         }
-        mk_request_error(http_status, cs, sr);
+        mk_request_error(http_status, cs, sr, __sched);
 
         /* STAGE_40, request has ended */
         mk_plugin_stage_run(MK_PLUGIN_STAGE_40, cs->socket,
-                            NULL, cs, sr);
+                            NULL, cs, sr, __sched);
     }
 
     /* STAGE_50, connection closed  and remove client_session*/
-    mk_plugin_stage_run(MK_PLUGIN_STAGE_50, cs->socket, NULL, NULL, NULL);
-    mk_session_remove(cs->socket);
+    mk_plugin_stage_run(MK_PLUGIN_STAGE_50, cs->socket, NULL, NULL, NULL, __sched);
+    mk_session_remove(cs->socket, __sched);
 }
 
-static int mk_request_process(struct client_session *cs, struct session_request *sr)
+static int mk_request_process(struct client_session *cs, struct session_request *sr, struct sched_list_node *__sched)
 {
     int status = 0;
     int socket = cs->socket;
@@ -526,7 +526,7 @@ static int mk_request_process(struct client_session *cs, struct session_request 
     status = mk_request_header_process(sr);
     if (status < 0) {
         mk_header_set_http_status(sr, MK_CLIENT_BAD_REQUEST);
-        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr);
+        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr, __sched);
         return EXIT_ABORT;
     }
 
@@ -534,19 +534,19 @@ static int mk_request_process(struct client_session *cs, struct session_request 
 
     /* Valid request URI? */
     if (sr->uri_processed.data[0] != '/') {
-        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr);
+        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr, __sched);
         return EXIT_NORMAL;
     }
 
     /* HTTP/1.1 needs Host header */
     if (!sr->host.data && sr->protocol == MK_HTTP_PROTOCOL_11) {
-        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr);
+        mk_request_error(MK_CLIENT_BAD_REQUEST, cs, sr, __sched);
         return EXIT_NORMAL;
     }
 
     /* Validating protocol version */
     if (sr->protocol == MK_HTTP_PROTOCOL_UNKNOWN) {
-        mk_request_error(MK_SERVER_HTTP_VERSION_UNSUP, cs, sr);
+        mk_request_error(MK_SERVER_HTTP_VERSION_UNSUP, cs, sr, __sched);
         return EXIT_ABORT;
     }
 
@@ -564,7 +564,7 @@ static int mk_request_process(struct client_session *cs, struct session_request 
             mk_header_set_http_status(sr, MK_REDIR_MOVED);
             sr->headers.location = mk_string_dup(sr->host_conf->header_redirect.data);
             sr->headers.content_length = 0;
-            mk_header_send(cs->socket, cs, sr);
+            mk_header_send(cs->socket, cs, sr, __sched);
             sr->headers.location = NULL;
             mk_server_cork_flag(cs->socket, TCP_CORK_OFF);
             return 0;
@@ -576,29 +576,29 @@ static int mk_request_process(struct client_session *cs, struct session_request 
         sr->uri_processed.len > 2 &&
         sr->uri_processed.data[1] == MK_USER_HOME) {
 
-        if (mk_user_init(cs, sr) != 0) {
-            mk_request_error(MK_CLIENT_NOT_FOUND, cs, sr);
+        if (mk_user_init(cs, sr, __sched) != 0) {
+            mk_request_error(MK_CLIENT_NOT_FOUND, cs, sr, __sched);
             return EXIT_ABORT;
         }
     }
 
     /* Handling method requested */
     if (sr->method == MK_HTTP_METHOD_POST || sr->method == MK_HTTP_METHOD_PUT) {
-        if ((status = mk_method_parse_data(cs, sr)) != 0) {
+        if ((status = mk_method_parse_data(cs, sr, __sched)) != 0) {
             return status;
         }
     }
 
     /* Plugins Stage 20 */
     int ret;
-    ret = mk_plugin_stage_run(MK_PLUGIN_STAGE_20, socket, NULL, cs, sr);
+    ret = mk_plugin_stage_run(MK_PLUGIN_STAGE_20, socket, NULL, cs, sr, __sched);
     if (ret == MK_PLUGIN_RET_CLOSE_CONX) {
         MK_TRACE("STAGE 20 requested close conexion");
         return EXIT_ABORT;
     }
 
     /* Normal HTTP process */
-    status = mk_http_init(cs, sr);
+    status = mk_http_init(cs, sr, __sched);
 
     MK_TRACE("[FD %i] HTTP Init returning %i", socket, status);
 
@@ -624,7 +624,7 @@ static mk_ptr_t *mk_request_set_default_page(char *title, mk_ptr_t message,
     return p;
 }
 
-int mk_handler_read(int socket, struct client_session *cs)
+int mk_handler_read(int socket, struct client_session *cs, struct sched_list_node *__sched)
 {
     int bytes;
     int available = 0;
@@ -639,7 +639,7 @@ int mk_handler_read(int socket, struct client_session *cs)
         new_size = cs->body_size + MK_REQUEST_CHUNK;
         if (new_size >= config->max_request_size) {
             MK_TRACE("Requested size is > config->max_request_size");
-            mk_request_premature_close(MK_CLIENT_REQUEST_ENTITY_TOO_LARGE, cs);
+            mk_request_premature_close(MK_CLIENT_REQUEST_ENTITY_TOO_LARGE, cs, __sched);
             return -1;
         }
 
@@ -663,7 +663,7 @@ int mk_handler_read(int socket, struct client_session *cs)
                 cs->body_size = new_size;
             }
             else {
-                mk_request_premature_close(MK_SERVER_INTERNAL_ERROR, cs);
+                mk_request_premature_close(MK_SERVER_INTERNAL_ERROR, cs, __sched);
                 return -1;
             }
         }
@@ -680,12 +680,12 @@ int mk_handler_read(int socket, struct client_session *cs)
             return 1;
         }
         else {
-            mk_session_remove(socket);
+            mk_session_remove(socket, __sched);
             return -1;
         }
     }
     if (bytes == 0) {
-        mk_session_remove(socket);
+        mk_session_remove(socket, __sched);
         return -1;
     }
 
@@ -697,14 +697,14 @@ int mk_handler_read(int socket, struct client_session *cs)
     return bytes;
 }
 
-int mk_handler_write(int socket, struct client_session *cs)
+int mk_handler_write(int socket, struct client_session *cs, struct sched_list_node *__sched)
 {
     int final_status = 0;
     struct session_request *sr_node;
     struct mk_list *sr_list, *sr_head;
 
     if (mk_list_is_empty(&cs->request_list) == 0) {
-        if (mk_request_parse(cs) != 0) {
+        if (mk_request_parse(cs, __sched) != 0) {
             return -1;
         }
     }
@@ -718,7 +718,7 @@ int mk_handler_write(int socket, struct client_session *cs)
             final_status = mk_http_send_file(cs, sr_node);
         }
         else if (sr_node->bytes_to_send < 0) {
-            final_status = mk_request_process(cs, sr_node);
+            final_status = mk_request_process(cs, sr_node, __sched);
         }
 
         /*
@@ -731,7 +731,7 @@ int mk_handler_write(int socket, struct client_session *cs)
         else {
             /* STAGE_40, request has ended */
             mk_plugin_stage_run(MK_PLUGIN_STAGE_40, socket,
-                                NULL, cs, sr_node);
+                                NULL, cs, sr_node, __sched);
             switch (final_status) {
             case EXIT_NORMAL:
             case EXIT_ERROR:
@@ -783,7 +783,7 @@ mk_ptr_t mk_request_index(char *pathfile, char *file_aux, const unsigned int fle
 
 /* Send error responses */
 int mk_request_error(int http_status, struct client_session *cs,
-                     struct session_request *sr) {
+                     struct session_request *sr, struct sched_list_node *__sched) {
     int ret, fd;
     mk_ptr_t message, *page = 0;
     struct error_page *entry;
@@ -826,7 +826,7 @@ int mk_request_error(int http_status, struct client_session *cs,
 
             memcpy(&sr->file_info, &finfo, sizeof(struct file_info));
 
-            mk_header_send(cs->socket, cs, sr);
+            mk_header_send(cs->socket, cs, sr, __sched);
             return mk_http_send_file(cs, sr);
         }
     }
@@ -910,7 +910,7 @@ int mk_request_error(int http_status, struct client_session *cs,
         mk_ptr_t_set(&sr->headers.content_type, "text/html\r\n");
     }
 
-    mk_header_send(cs->socket, cs, sr);
+    mk_header_send(cs->socket, cs, sr, __sched);
 
     if (page) {
         if (sr->method != MK_HTTP_METHOD_HEAD)
@@ -1014,12 +1014,11 @@ struct client_session *mk_session_create(int socket, struct sched_list_node *sch
     return cs;
 }
 
-struct client_session *mk_session_get(int socket)
+struct client_session *mk_session_get(int socket, struct sched_list_node *__sched)
 {
     struct client_session *cs;
     struct rb_node *node;
 
-    STATS_COUNTER_INIT_NO_SCHED;
     STATS_COUNTER_START_NO_SCHED(mk_session_get);
 
     node = cs_list->rb_node;
@@ -1042,11 +1041,11 @@ struct client_session *mk_session_get(int socket)
  * From thread sched_list_node "list", remove the client_session
  * struct information
  */
-void mk_session_remove(int socket)
+void mk_session_remove(int socket, struct sched_list_node *__sched)
 {
     struct client_session *cs_node;
 
-    cs_node = mk_session_get(socket);
+    cs_node = mk_session_get(socket, __sched);
     if (cs_node) {
         rb_erase(&cs_node->_rb_head, cs_list);
         if (cs_node->body != cs_node->body_fixed) {

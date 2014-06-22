@@ -562,17 +562,15 @@ void mk_plugin_exit_all()
 int mk_plugin_stage_run(unsigned int hook,
                         unsigned int socket,
                         struct sched_connection *conx,
-                        struct client_session *cs, struct session_request *sr)
+                        struct client_session *cs, struct session_request *sr, struct sched_list_node *__sched)
 {
     int ret;
     struct plugin_stagem *stm;
 
-    STATS_COUNTER_INIT_NO_SCHED;
     STATS_COUNTER_START_NO_SCHED(mk_plugin_stage_run);
 
 #ifdef SHAREDLIB
-    struct sched_list_node *thconf = mk_sched_get_thread_conf();
-    mklib_ctx ctx = thconf->ctx;
+    mklib_ctx ctx = __sched->ctx;
     char buf[bufsize], *ptr = buf;
     unsigned long len;
 
@@ -747,7 +745,7 @@ int mk_plugin_stage_run(unsigned int hook,
         sr->headers.content_length = clen;
         len = strlen(header);
         if (len) api->header_add(sr, header, len);
-        api->header_send(socket, cs, sr);
+        api->header_send(socket, cs, sr, __sched);
 
         /* Data */
         while (clen > 0) {
@@ -911,7 +909,7 @@ int mk_plugin_event_add(int socket, int mode,
     return mk_epoll_add(sched->epoll_fd, socket, mode, behavior);
 }
 
-int mk_plugin_http_request_end(int socket)
+int mk_plugin_http_request_end(int socket, struct sched_list_node *__sched)
 {
     int ret;
     int con;
@@ -920,7 +918,7 @@ int mk_plugin_http_request_end(int socket)
 
     MK_TRACE("[FD %i] PLUGIN HTTP REQUEST END", socket);
 
-    cs = mk_session_get(socket);
+    cs = mk_session_get(socket, __sched);
     if (!cs) {
         return -1;
     }
@@ -930,9 +928,9 @@ int mk_plugin_http_request_end(int socket)
         return -1;
     }
     sr = mk_list_entry_last(&cs->request_list, struct session_request, _head);
-    mk_plugin_stage_run(MK_PLUGIN_STAGE_40, socket, NULL, cs, sr);
+    mk_plugin_stage_run(MK_PLUGIN_STAGE_40, socket, NULL, cs, sr, __sched);
 
-    ret = mk_http_request_end(socket);
+    ret = mk_http_request_end(socket, __sched);
     MK_TRACE(" ret = %i", ret);
 
     if (ret < 0) {
@@ -1047,14 +1045,13 @@ int mk_plugin_event_check_return(const char *hook, int ret)
     return -1;
 }
 
-int mk_plugin_event_read(int socket)
+int mk_plugin_event_read(int socket, struct sched_list_node *__sched)
 {
     int ret;
     struct plugin *node;
     struct mk_list *head;
     struct plugin_event *event;
 
-    STATS_COUNTER_INIT_NO_SCHED;
     STATS_COUNTER_START_NO_SCHED(mk_plugin_event_read);
 
     MK_TRACE("[FD %i] Read Event", socket);
@@ -1104,14 +1101,13 @@ int mk_plugin_event_read(int socket)
     return MK_PLUGIN_RET_EVENT_CONTINUE;
 }
 
-int mk_plugin_event_write(int socket)
+int mk_plugin_event_write(int socket, struct sched_list_node *__sched)
 {
     int ret;
     struct plugin *node;
     struct mk_list *head;
     struct plugin_event *event;
 
-    STATS_COUNTER_INIT_NO_SCHED;
     STATS_COUNTER_START_NO_SCHED(mk_plugin_event_write);
 
     MK_TRACE("[FD %i] Plugin event write", socket);

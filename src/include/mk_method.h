@@ -21,7 +21,7 @@
 #define MK_METHOD_H
 
 /* method.c */
-int mk_method_parse_data(struct client_session *cs, struct session_request *sr);
+int mk_method_parse_data(struct client_session *cs, struct session_request *sr, struct sched_list_node *__sched);
 mk_ptr_t mk_method_get_data(void *data, int size);
 long int mk_method_validate_content_length(const char *body, int body_len);
 

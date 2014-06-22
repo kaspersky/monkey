@@ -25,8 +25,10 @@
 /* User home string */
 #define MK_USER_HOME '~'
 
+struct sched_list_node;
+
 /* user.c */
-int mk_user_init(struct client_session *cs, struct session_request *sr);
+int mk_user_init(struct client_session *cs, struct session_request *sr, struct sched_list_node *__sched);
 int mk_user_set_uidgid(void);
 int mk_user_undo_uidgid(void);
 

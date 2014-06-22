@@ -136,7 +136,7 @@ static void mk_header_iov_free(struct mk_iov *iov)
 
 /* Send response headers */
 int mk_header_send(int fd, struct client_session *cs,
-                   struct session_request *sr)
+                   struct session_request *sr, struct sched_list_node *__sched)
 {
     int i=0;
     unsigned long len = 0;
@@ -145,7 +145,6 @@ int mk_header_send(int fd, struct client_session *cs,
     struct response_headers *sh;
     struct mk_iov *iov;
 
-    STATS_COUNTER_INIT_NO_SCHED;
     STATS_COUNTER_START_NO_SCHED(mk_header_send);
 
     sh = &sr->headers;

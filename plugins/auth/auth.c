@@ -146,7 +146,7 @@ void _mkp_core_thctx()
 /* Object handler */
 int _mkp_stage_30(struct plugin *plugin,
                   struct client_session *cs,
-                  struct session_request *sr)
+                  struct session_request *sr, struct sched_list_node *__sched)
 {
     int val;
     short int is_restricted = MK_FALSE;
@@ -215,7 +215,7 @@ int _mkp_stage_30(struct plugin *plugin,
     mk_api->header_add(sr,
                        loc_entry->auth_http_header.data,
                        loc_entry->auth_http_header.len);
-    mk_api->header_send(cs->socket, cs, sr);
+    mk_api->header_send(cs->socket, cs, sr, __sched);
 
     return MK_PLUGIN_RET_END;
 }

@@ -52,6 +52,8 @@
 
 #define MK_EPOLL_STATE_INDEX_CHUNK 64
 
+struct sched_list_node;
+
 typedef struct
 {
     int (*read) (int);
@@ -85,7 +87,7 @@ struct epoll_state_index
 
 /* Monkey epoll calls */
 int mk_epoll_create();
-void *mk_epoll_init(int server_fd, int efd, int max_events);
+void *mk_epoll_init(int server_fd, int efd, int max_events, struct sched_list_node *__sched);
 struct epoll_state *mk_epoll_state_get(int fd);
 
 int mk_epoll_add(int efd, int fd, int mode, unsigned int behavior);

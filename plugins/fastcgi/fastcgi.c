@@ -369,7 +369,7 @@ int fcgi_send_abort_request(struct request *req, struct fcgi_fd *fd)
 	return -1;
 }
 
-int fcgi_send_response_headers(struct request *req)
+int fcgi_send_response_headers(struct request *req, struct sched_list_node *__sched)
 {
 	ssize_t headers_offset;
 
@@ -388,7 +388,7 @@ int fcgi_send_response_headers(struct request *req)
           "Failed to drop from req->iov.");
 	req->sr->headers.content_length = chunk_iov_length(&req->iov);
 
-	mk_api->header_send(req->fd, req->cs, req->sr);
+	mk_api->header_send(req->fd, req->cs, req->sr, __sched);
 	req->sr->headers.location = NULL;
 
 	request_set_flag(req, REQ_HEADERS_SENT);
@@ -399,7 +399,7 @@ int fcgi_send_response_headers(struct request *req)
 	return -1;
 }
 
-int fcgi_send_response(struct request *req)
+int fcgi_send_response(struct request *req, struct sched_list_node *__sched)
 {
 	int fd = req->fd;
 	ssize_t ret;
@@ -423,7 +423,7 @@ int fcgi_send_response(struct request *req)
 		request_recycle(req);
 
 		mk_api->socket_cork_flag(fd, TCP_CORK_OFF);
-		mk_api->http_request_end(fd);
+		mk_api->http_request_end(fd, __sched);
 	}
 	else {
 		check(!chunk_iov_drop(&req->iov, ret),
@@ -661,7 +661,7 @@ static int regex_match_location(const struct fcgi_config *config,
 }
 
 int _mkp_stage_30(struct plugin *plugin, struct client_session *cs,
-                  struct session_request *sr)
+                  struct session_request *sr, struct sched_list_node *__sched)
 {
 	char *uri = NULL;
 	struct fcgi_context *cntx;
@@ -869,7 +869,7 @@ static int hangup(int socket)
 	}
 }
 
-int _mkp_event_write(int socket)
+int _mkp_event_write(int socket, struct sched_list_node *__sched)
 {
 	uint16_t req_id = 0;
 	struct fcgi_context *cntx;
@@ -895,9 +895,9 @@ int _mkp_event_write(int socket)
 
 		PLUGIN_TRACE("[REQ_ID %d] Request ended.", req_id);
 
-		check(!fcgi_send_response_headers(req),
+		check(!fcgi_send_response_headers(req, __sched),
               "[REQ_ID %d] Failed to send response headers.", req_id);
-		check(!fcgi_send_response(req),
+		check(!fcgi_send_response(req, __sched),
               "[REQ_ID %d] Failed to send response.", req_id);
 
 		return MK_PLUGIN_RET_EVENT_OWNED;
@@ -908,12 +908,12 @@ int _mkp_event_write(int socket)
 #endif
 
 		mk_api->http_request_error(MK_SERVER_INTERNAL_ERROR,
-                                   req->cs, req->sr);
+                                   req->cs, req->sr, __sched);
 
 		if (req->fcgi_fd == -1) {
 			request_recycle(req);
 		}
-		mk_api->http_request_end(socket);
+		mk_api->http_request_end(socket, __sched);
 
 		return MK_PLUGIN_RET_EVENT_OWNED;
 	}
@@ -938,7 +938,7 @@ int _mkp_event_write(int socket)
 				mk_api->socket_cork_flag(fd->fd, TCP_CORK_ON);
 			}
 
-			return _mkp_event_write(fd->fd);
+			return _mkp_event_write(fd->fd, __sched);
 		}
 		else {
 			PLUGIN_TRACE("[FCGI_FD %d] Sleep.", fd->fd);
@@ -1056,12 +1056,12 @@ error:
 	return MK_PLUGIN_RET_EVENT_CLOSE;
 }
 
-int _mkp_event_close(int socket)
+int _mkp_event_close(int socket, struct sched_list_node *__sched)
 {
 	return hangup(socket);
 }
 
-int _mkp_event_error(int socket)
+int _mkp_event_error(int socket, struct sched_list_node *__sched)
 {
 	return hangup(socket);
 }

@@ -342,7 +342,7 @@ int _mkp_stage_10(unsigned int socket, struct sched_connection *conx)
 
 int _mkp_stage_30(struct plugin *p,
         struct client_session *cs,
-        struct session_request *sr)
+        struct session_request *sr, struct sched_list_node *__sched)
 {
     mk_ptr_t referer;
     (void) p;

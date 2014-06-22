@@ -284,7 +284,7 @@ int mk_sched_register_client(int remote_fd, struct sched_list_node *sched)
     /* Before to continue, we need to run plugin stage 10 */
     ret = mk_plugin_stage_run(MK_PLUGIN_STAGE_10,
                               remote_fd,
-                              sched_conn, NULL, NULL);
+                              sched_conn, NULL, NULL, sched);
 
     /* Close connection, otherwise continue */
     if (ret == MK_PLUGIN_RET_CLOSE_CONX) {
@@ -482,7 +482,7 @@ void *mk_sched_launch_worker_loop(void *thread_conf)
     __builtin_prefetch(&worker_sched_node);
 
     /* Init epoll_wait() loop */
-    mk_epoll_init(thinfo->server_fd, thinfo->epoll_fd, epoll_max_events);
+    mk_epoll_init(thinfo->server_fd, thinfo->epoll_fd, epoll_max_events, thinfo);
 
     return 0;
 }
@@ -561,7 +561,7 @@ int mk_sched_remove_client(struct sched_list_node *sched, int remote_fd)
         MK_TRACE("[FD %i] Scheduler remove", remote_fd);
 
         /* Invoke plugins in stage 50 */
-        mk_plugin_stage_run(MK_PLUGIN_STAGE_50, remote_fd, NULL, NULL, NULL);
+        mk_plugin_stage_run(MK_PLUGIN_STAGE_50, remote_fd, NULL, NULL, NULL, sched);
 
         sched->closed_connections++;
 
@@ -677,7 +677,7 @@ int mk_sched_check_timeouts(struct sched_list_node *sched)
                          cs_node->socket);
                 MK_LT_SCHED(cs_node->socket, "TIMEOUT_REQ_INCOMPLETE");
                 mk_sched_remove_client(sched, cs_node->socket);
-                mk_session_remove(cs_node->socket);
+                mk_session_remove(cs_node->socket, sched);
 
                 /* This removal invalidated our iterator. Start over from the beginning. */
                 node = rb_first(cs_list);
